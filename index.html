@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>음주기록</title>
+<meta name="theme-color" content="#2c3e50">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+  :root {
+    --bg: #14171c;
+    --card: #1e232b;
+    --card2: #262c36;
+    --text: #e8eaed;
+    --muted: #8b93a1;
+    --line: #333a46;
+    --lunch: #f4b942;
+    --appointment: #4a90d9;
+    --solo: #e5484d;
+    --ok: #3fb950;
+    --warn: #e5484d;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 0 0 40px;
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, "Pretendard", "Noto Sans KR", sans-serif;
+    -webkit-tap-highlight-color: transparent;
+  }
+  header {
+    padding: 18px 16px 10px;
+    position: sticky; top: 0; background: var(--bg); z-index: 5;
+  }
+  h1 { font-size: 1.25em; margin: 0 0 2px; }
+  .subtitle { color: var(--muted); font-size: 0.82em; margin: 0; }
+
+  .card {
+    background: var(--card);
+    border-radius: 14px;
+    margin: 12px 16px;
+    padding: 14px;
+  }
+
+  /* 주간 카운트 */
+  .week-box { display: flex; align-items: center; justify-content: space-between; }
+  .week-box .count { font-size: 1.8em; font-weight: 700; }
+  .week-box .count.over { color: var(--warn); }
+  .week-box .count.caution { color: var(--lunch); }
+  .week-box .count.ok { color: var(--ok); }
+  .week-label { color: var(--muted); font-size: 0.85em; }
+  .week-warn {
+    margin-top: 8px; font-size: 0.85em; color: var(--warn);
+    display: none;
+  }
+  .week-warn.show { display: block; }
+
+  /* 연속 기록 */
+  .streaks { display: flex; gap: 10px; }
+  .streak { flex: 1; background: var(--card2); border-radius: 10px; padding: 10px; text-align: center; }
+  .streak .num { font-size: 1.5em; font-weight: 700; }
+  .streak .num.solo { color: var(--ok); }
+  .streak .num.any { color: var(--ok); }
+  .streak .lbl { font-size: 0.75em; color: var(--muted); margin-top: 2px; }
+
+  /* 달력 */
+  .cal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .cal-head button {
+    background: var(--card2); border: none; color: var(--text);
+    border-radius: 8px; padding: 6px 12px; font-size: 1em;
+  }
+  .cal-title { font-weight: 700; }
+  .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+  .cal-dow { text-align: center; font-size: 0.72em; color: var(--muted); padding-bottom: 4px; }
+  .cal-day {
+    aspect-ratio: 1; border-radius: 9px; background: var(--card2);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    font-size: 0.8em; position: relative; color: var(--text);
+  }
+  .cal-day.empty { background: transparent; }
+  .cal-day.today { outline: 2px solid var(--muted); }
+  .cal-day .dots { display: flex; gap: 2px; margin-top: 3px; }
+  .cal-day .dot { width: 6px; height: 6px; border-radius: 50%; }
+  .cal-day.has-solo { box-shadow: inset 0 0 0 2px var(--solo); }
+  .legend { display: flex; gap: 12px; margin-top: 10px; flex-wrap: wrap; font-size: 0.75em; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 4px; }
+  .legend .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+
+  /* 기록 추가 폼 */
+  .card h2 { font-size: 1em; margin: 0 0 10px; }
+  .field { margin-bottom: 10px; }
+  .field label { display: block; font-size: 0.8em; color: var(--muted); margin-bottom: 4px; }
+  .field input[type="date"],
+  .field input[type="text"],
+  .field textarea {
+    width: 100%; background: var(--card2); border: 1px solid var(--line);
+    color: var(--text); border-radius: 8px; padding: 10px; font-size: 0.95em;
+    font-family: inherit;
+  }
+  .situation-pick { display: flex; gap: 8px; }
+  .situation-pick label {
+    flex: 1; text-align: center; padding: 10px 4px; border-radius: 10px;
+    background: var(--card2); border: 2px solid transparent; cursor: pointer;
+    font-size: 0.85em; color: var(--muted);
+  }
+  .situation-pick input { display: none; }
+  .situation-pick input:checked + span { color: var(--text); font-weight: 700; }
+  .situation-pick label.sel-lunch input:checked ~ * { }
+  .situation-pick label[data-sit="lunch"].active { border-color: var(--lunch); background: #3a311c; }
+  .situation-pick label[data-sit="appointment"].active { border-color: var(--appointment); background: #1c2c3a; }
+  .situation-pick label[data-sit="solo"].active { border-color: var(--solo); background: #3a1c1e; }
+
+  button.primary {
+    width: 100%; padding: 13px; border: none; border-radius: 10px;
+    background: var(--ok); color: #06240f; font-weight: 700; font-size: 1em;
+  }
+  button.danger { background: var(--solo); color: #fff; }
+  button.secondary {
+    background: var(--card2); color: var(--text); border: 1px solid var(--line);
+    border-radius: 8px; padding: 10px; font-size: 0.85em;
+  }
+
+  /* 목록 */
+  .log-item {
+    display: flex; align-items: center; gap: 10px; padding: 10px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .log-item:last-child { border-bottom: none; }
+  .log-item .tag {
+    width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+  }
+  .log-item .info { flex: 1; min-width: 0; }
+  .log-item .date { font-size: 0.85em; font-weight: 600; }
+  .log-item .detail { font-size: 0.78em; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .log-item .del { background: none; border: none; color: var(--muted); font-size: 1.1em; padding: 4px 8px; }
+  .empty-note { color: var(--muted); font-size: 0.85em; text-align: center; padding: 10px 0; }
+
+  .io-row { display: flex; gap: 8px; }
+  .io-row > * { flex: 1; }
+  input[type="file"] { display: none; }
+
+  .toast {
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+    background: #2b2f38; color: var(--text); padding: 10px 18px; border-radius: 20px;
+    font-size: 0.85em; opacity: 0; pointer-events: none; transition: opacity 0.25s;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  }
+  .toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🍶 음주기록</h1>
+  <p class="subtitle">2026-11-08부터 절주 중 — 혼술 금지, 주 1회(최대 2회)</p>
+</header>
+
+<div class="card week-box-wrap">
+  <div class="week-box">
+    <div>
+      <div class="week-label">이번 주 음주</div>
+      <div class="count" id="weekCount">0회</div>
+    </div>
+    <div style="text-align:right;">
+      <div class="week-label" id="weekRange"></div>
+    </div>
+  </div>
+  <div class="week-warn" id="weekWarn"></div>
+</div>
+
+<div class="card">
+  <div class="streaks">
+    <div class="streak">
+      <div class="num solo" id="soloStreak">-</div>
+      <div class="lbl">혼술 안 한 지</div>
+    </div>
+    <div class="streak">
+      <div class="num any" id="anyStreak">-</div>
+      <div class="lbl">안 마신 지</div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="cal-head">
+    <button id="prevMonth">◀</button>
+    <div class="cal-title" id="calTitle"></div>
+    <button id="nextMonth">▶</button>
+  </div>
+  <div class="cal-grid" id="calDow"></div>
+  <div class="cal-grid" id="calGrid"></div>
+  <div class="legend">
+    <span><i class="dot" style="background:var(--lunch)"></i>점심 막걸리</span>
+    <span><i class="dot" style="background:var(--appointment)"></i>술 약속</span>
+    <span><i class="dot" style="background:var(--solo)"></i>혼술</span>
+  </div>
+</div>
+
+<div class="card">
+  <h2>기록 추가</h2>
+  <form id="addForm">
+    <div class="field">
+      <label>날짜</label>
+      <input type="date" id="fDate" required>
+    </div>
+    <div class="field">
+      <label>상황</label>
+      <div class="situation-pick" id="situationPick">
+        <label data-sit="lunch" class="active"><input type="radio" name="situation" value="lunch" checked><span>🍶 점심 막걸리</span></label>
+        <label data-sit="appointment"><input type="radio" name="situation" value="appointment"><span>🍻 술 약속</span></label>
+        <label data-sit="solo"><input type="radio" name="situation" value="solo"><span>⚠️ 혼술</span></label>
+      </div>
+    </div>
+    <div class="field">
+      <label>주종</label>
+      <input type="text" id="fType" placeholder="예: 막걸리, 소주, 맥주">
+    </div>
+    <div class="field">
+      <label>양</label>
+      <input type="text" id="fAmount" placeholder="예: 한 병, 2잔, 약간">
+    </div>
+    <div class="field">
+      <label>메모</label>
+      <textarea id="fMemo" rows="2" placeholder="메모 (선택)"></textarea>
+    </div>
+    <button type="submit" class="primary">기록 추가</button>
+  </form>
+</div>
+
+<div class="card">
+  <h2>최근 기록</h2>
+  <div id="logList"></div>
+</div>
+
+<div class="card">
+  <h2>백업</h2>
+  <div class="io-row">
+    <button class="secondary" id="exportBtn">📤 내보내기 (JSON)</button>
+    <button class="secondary" id="importBtn">📥 가져오기 (JSON)</button>
+  </div>
+  <input type="file" id="importFile" accept="application/json">
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
