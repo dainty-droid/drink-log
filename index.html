@@ -87,6 +87,27 @@
   .legend span { display: inline-flex; align-items: center; gap: 4px; }
   .legend .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
 
+  /* 주종별 요약 */
+  .summary-block { margin-bottom: 14px; }
+  .summary-block:last-child { margin-bottom: 0; }
+  .summary-title { font-size: 0.8em; color: var(--muted); margin-bottom: 6px; }
+  .type-summary .type-row {
+    display: flex; justify-content: space-between; align-items: baseline;
+    background: var(--card2); border-radius: 8px; padding: 8px 10px; margin-bottom: 6px;
+    gap: 10px;
+  }
+  .type-summary .type-row:last-child { margin-bottom: 0; }
+  .type-summary .type-name { font-weight: 700; font-size: 0.9em; flex-shrink: 0; }
+  .type-summary .type-count { color: var(--muted); font-size: 0.78em; flex-shrink: 0; }
+  .type-summary .type-amounts {
+    color: var(--muted); font-size: 0.78em; text-align: right; flex: 1;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .type-summary .total-row {
+    display: flex; justify-content: space-between; font-size: 0.8em; color: var(--muted);
+    padding: 4px 10px 0;
+  }
+
   /* 기록 추가 폼 */
   .card h2 { font-size: 1em; margin: 0 0 10px; }
   .field { margin-bottom: 10px; }
@@ -194,6 +215,18 @@
     <span><i class="dot" style="background:var(--lunch)"></i>점심 막걸리</span>
     <span><i class="dot" style="background:var(--appointment)"></i>술 약속</span>
     <span><i class="dot" style="background:var(--solo)"></i>혼술</span>
+  </div>
+</div>
+
+<div class="card">
+  <h2>주종별 요약</h2>
+  <div class="summary-block">
+    <div class="summary-title">이번 주</div>
+    <div id="weekTypeSummary" class="type-summary"></div>
+  </div>
+  <div class="summary-block">
+    <div class="summary-title" id="monthTypeTitle">이번 달</div>
+    <div id="monthTypeSummary" class="type-summary"></div>
   </div>
 </div>
 

@@ -133,6 +133,87 @@
     }
   }
 
+  // ---------- 주종별 요약 (이번 주 / 달력에 보이는 달) ----------
+  function getWeekEntries(refDate) {
+    var ws = weekStart(refDate);
+    var we = addDays(ws, 6);
+    var wsStr = fmtDate(ws), weStr = fmtDate(we);
+    return log.filter(function (r) { return r.date >= wsStr && r.date <= weStr; });
+  }
+
+  function getMonthEntries(year, month) {
+    var prefix = year + "-" + String(month + 1).padStart(2, "0");
+    return log.filter(function (r) { return r.date.indexOf(prefix) === 0; });
+  }
+
+  function summarizeTypes(entries) {
+    // 주종(drinkType)이 비어있으면 "주종 미입력"으로 묶는다. 양(amount)은 자유
+    // 텍스트("약간"/"1병" 등 단위가 제각각)라 숫자로 합산하지 않고, 기록된 값들을
+    // 그대로 나열해서 보여준다 - 억지로 합산하면 오히려 왜곡된 숫자가 나온다.
+    var byType = {};
+    entries.forEach(function (r) {
+      var key = (r.drinkType || "").trim() || "주종 미입력";
+      if (!byType[key]) byType[key] = { count: 0, amounts: [] };
+      byType[key].count += 1;
+      if (r.amount && r.amount.trim()) byType[key].amounts.push(r.amount.trim());
+    });
+    return byType;
+  }
+
+  function renderTypeSummary(containerId, entries) {
+    var container = document.getElementById(containerId);
+    container.innerHTML = "";
+    if (!entries.length) {
+      var empty = document.createElement("div");
+      empty.className = "empty-note";
+      empty.textContent = "기록 없음";
+      container.appendChild(empty);
+      return;
+    }
+    var byType = summarizeTypes(entries);
+    var types = Object.keys(byType).sort(function (a, b) { return byType[b].count - byType[a].count; });
+    types.forEach(function (type) {
+      var info = byType[type];
+      var row = document.createElement("div");
+      row.className = "type-row";
+
+      var name = document.createElement("div");
+      name.className = "type-name";
+      name.textContent = type;
+      row.appendChild(name);
+
+      var amounts = document.createElement("div");
+      amounts.className = "type-amounts";
+      amounts.textContent = info.amounts.length ? info.amounts.join(", ") : "";
+      row.appendChild(amounts);
+
+      var count = document.createElement("div");
+      count.className = "type-count";
+      count.textContent = info.count + "회";
+      row.appendChild(count);
+
+      container.appendChild(row);
+    });
+
+    var total = document.createElement("div");
+    total.className = "total-row";
+    var hasSolo = entries.some(function (r) { return r.situation === "solo"; });
+    total.innerHTML = "<span>총 " + entries.length + "회</span><span>" + (hasSolo ? "🚨 혼술 포함" : "") + "</span>";
+    container.appendChild(total);
+  }
+
+  function renderWeekTypeSummary() {
+    renderTypeSummary("weekTypeSummary", getWeekEntries(new Date()));
+  }
+
+  function renderMonthTypeSummary() {
+    var y = calCursor.getFullYear(), m = calCursor.getMonth();
+    var todayY = new Date().getFullYear(), todayM = new Date().getMonth();
+    document.getElementById("monthTypeTitle").textContent =
+      (y === todayY && m === todayM) ? "이번 달" : (y + "년 " + (m + 1) + "월");
+    renderTypeSummary("monthTypeSummary", getMonthEntries(y, m));
+  }
+
   // ---------- 렌더: 달력 ----------
   var calCursor = new Date(); // 현재 보고 있는 달 (일자는 무시, 년/월만 사용)
 
@@ -209,10 +290,12 @@
   document.getElementById("prevMonth").addEventListener("click", function () {
     calCursor = new Date(calCursor.getFullYear(), calCursor.getMonth() - 1, 1);
     renderCalendar();
+    renderMonthTypeSummary();
   });
   document.getElementById("nextMonth").addEventListener("click", function () {
     calCursor = new Date(calCursor.getFullYear(), calCursor.getMonth() + 1, 1);
     renderCalendar();
+    renderMonthTypeSummary();
   });
 
   // ---------- 렌더: 최근 기록 목록 ----------
@@ -362,6 +445,8 @@
     renderWeek();
     renderStreaks();
     renderCalendar();
+    renderWeekTypeSummary();
+    renderMonthTypeSummary();
     renderLogList();
   }
 
