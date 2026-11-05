@@ -50,11 +50,13 @@
   .week-box .count.caution { color: var(--lunch); }
   .week-box .count.ok { color: var(--ok); }
   .week-label { color: var(--muted); font-size: 0.85em; }
-  .week-warn {
-    margin-top: 8px; font-size: 0.85em; color: var(--warn);
-    display: none;
+  .banner {
+    margin-top: 10px; padding: 12px 14px; border-radius: 10px;
+    font-weight: 700; font-size: 0.95em; display: none;
   }
-  .week-warn.show { display: block; }
+  .banner.show { display: block; }
+  .banner-red { background: #3a1416; color: #ff9898; border: 1px solid var(--solo); }
+  .banner-yellow { background: #3a311c; color: #ffd98a; border: 1px solid var(--lunch); }
 
   /* 연속 기록 */
   .streaks { display: flex; gap: 10px; }
@@ -107,6 +109,18 @@
     display: flex; justify-content: space-between; font-size: 0.8em; color: var(--muted);
     padding: 4px 10px 0;
   }
+
+  /* 추이 */
+  .trend-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; }
+  .trend-label { width: 44px; flex-shrink: 0; font-size: 0.75em; color: var(--muted); }
+  .trend-bar-wrap { flex: 1; background: var(--card2); border-radius: 6px; height: 18px; overflow: hidden; }
+  .trend-bar { height: 100%; border-radius: 6px; transition: width 0.2s; min-width: 3px; }
+  .trend-bar.ok { background: var(--ok); }
+  .trend-bar.caution { background: var(--lunch); }
+  .trend-bar.over { background: var(--solo); }
+  .trend-info { width: 108px; flex-shrink: 0; font-size: 0.72em; color: var(--muted); text-align: right; }
+  .trend-info b { color: var(--text); font-size: 1.05em; }
+  .trend-info .solo-mark { color: var(--solo); }
 
   /* 기록 추가 폼 */
   .card h2 { font-size: 1em; margin: 0 0 10px; }
@@ -187,7 +201,8 @@
       <div class="week-label" id="weekRange"></div>
     </div>
   </div>
-  <div class="week-warn" id="weekWarn"></div>
+  <div class="banner banner-red" id="soloBanner">🚨 이번 주 혼술 기록이 있습니다 — 약속을 못 지키고 있습니다!!</div>
+  <div class="banner banner-yellow" id="countBanner">⚠️ 이번 주 2회 이상 마셨습니다 — 이번 주는 여기까지만.</div>
 </div>
 
 <div class="card">
@@ -228,6 +243,11 @@
     <div class="summary-title" id="monthTypeTitle">이번 달</div>
     <div id="monthTypeSummary" class="type-summary"></div>
   </div>
+</div>
+
+<div class="card">
+  <h2>추이 (최근 8주)</h2>
+  <div id="trendList"></div>
 </div>
 
 <div class="card">

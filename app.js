@@ -68,6 +68,39 @@
     return addDays(nd, diffToMon);
   }
 
+  // ---------- 양(amount) 병합 ----------
+  // "약 1병"/"약1병" 같은 수식어는 떼고 "1병"으로 취급. 숫자+단위로 분해되는 것끼리는
+  // 같은 단위면 숫자를 더해서("1병"+"1병" -> "2병") 하나로 합치고, 단위가 다르면
+  // 나란히 나열한다("1병"+"2잔" -> "1병 2잔"). "약간"처럼 숫자가 안 들어있는 건
+  // 그대로 뒤에 붙인다.
+  function parseAmount(raw) {
+    var s = (raw || "").trim().replace(/^약\s*/, "");
+    var m = s.match(/^(\d+(?:\.\d+)?)\s*(.+)$/);
+    if (!m) return null;
+    return { num: parseFloat(m[1]), unit: m[2].trim() };
+  }
+
+  function mergeAmounts(amounts) {
+    var unitSums = {};
+    var unitOrder = [];
+    var freeform = [];
+    amounts.forEach(function (raw) {
+      var p = parseAmount(raw);
+      if (p) {
+        if (!(p.unit in unitSums)) { unitSums[p.unit] = 0; unitOrder.push(p.unit); }
+        unitSums[p.unit] += p.num;
+      } else if (raw && raw.trim()) {
+        freeform.push(raw.trim());
+      }
+    });
+    var parts = unitOrder.map(function (u) {
+      var n = unitSums[u];
+      var nStr = Number.isInteger(n) ? String(n) : String(Math.round(n * 100) / 100);
+      return nStr + u;
+    });
+    return parts.concat(freeform).join(" ");
+  }
+
   // ---------- 렌더: 주간 카운트 ----------
   function renderWeek() {
     var today = new Date();
@@ -86,17 +119,11 @@
     document.getElementById("weekRange").textContent =
       (ws.getMonth() + 1) + "/" + ws.getDate() + " ~ " + (we.getMonth() + 1) + "/" + we.getDate();
 
-    var warnEl = document.getElementById("weekWarn");
-    var msgs = [];
-    if (count > 2) msgs.push("⚠️ 이번 주 " + count + "회 - 규칙(최대 2회) 초과!");
-    else if (count === 2) msgs.push("이번 주 2회 - 이번 주는 여기까지만.");
-    if (hasSolo) msgs.push("🚨 이번 주 혼술 기록 있음 - 무조건 금지 규칙 위반.");
-    if (msgs.length) {
-      warnEl.textContent = msgs.join(" ");
-      warnEl.classList.add("show");
-    } else {
-      warnEl.classList.remove("show");
-    }
+    // 혼술이 있으면 빨간 배너(약속 위반, 더 급한 경고)만 띄우고, 2회 경고는 혼술이
+    // 없을 때만 노란 배너로 따로 띄운다(관리자님 요청, 2026-11-05 - "혼술이 있으면
+    // 빨간 배너로 경고, 2회 이상이면 노란색으로").
+    document.getElementById("soloBanner").classList.toggle("show", hasSolo);
+    document.getElementById("countBanner").classList.toggle("show", count >= 2 && !hasSolo);
   }
 
   // ---------- 렌더: 연속 기록 ----------
@@ -184,7 +211,7 @@
 
       var amounts = document.createElement("div");
       amounts.className = "type-amounts";
-      amounts.textContent = info.amounts.length ? info.amounts.join(", ") : "";
+      amounts.textContent = mergeAmounts(info.amounts);
       row.appendChild(amounts);
 
       var count = document.createElement("div");
@@ -212,6 +239,61 @@
     document.getElementById("monthTypeTitle").textContent =
       (y === todayY && m === todayM) ? "이번 달" : (y + "년 " + (m + 1) + "월");
     renderTypeSummary("monthTypeSummary", getMonthEntries(y, m));
+  }
+
+  // ---------- 렌더: 추이 (최근 8주, 오래된 주 -> 이번 주 순) ----------
+  var TREND_WEEKS = 8;
+
+  function renderTrend() {
+    var container = document.getElementById("trendList");
+    container.innerHTML = "";
+
+    var today = new Date();
+    var thisWeekStart = weekStart(today);
+    var weeks = [];
+    for (var i = TREND_WEEKS - 1; i >= 0; i--) {
+      var ws = addDays(thisWeekStart, -7 * i);
+      var we = addDays(ws, 6);
+      var entries = getWeekEntries(ws);
+      weeks.push({ ws: ws, we: we, entries: entries, isCurrent: i === 0 });
+    }
+
+    var maxCount = Math.max.apply(null, weeks.map(function (w) { return w.entries.length; }).concat([1]));
+
+    weeks.forEach(function (w, idx) {
+      var count = w.entries.length;
+      var hasSolo = w.entries.some(function (r) { return r.situation === "solo"; });
+      var amounts = [];
+      w.entries.forEach(function (r) { if (r.amount && r.amount.trim()) amounts.push(r.amount); });
+      var mergedAmount = mergeAmounts(amounts);
+
+      var tone = hasSolo ? "over" : (count >= 2 ? "caution" : "ok");
+
+      var row = document.createElement("div");
+      row.className = "trend-row";
+
+      var label = document.createElement("div");
+      label.className = "trend-label";
+      label.textContent = (idx + 1) + "주차" + (w.isCurrent ? "(이번주)" : "");
+      row.appendChild(label);
+
+      var barWrap = document.createElement("div");
+      barWrap.className = "trend-bar-wrap";
+      var bar = document.createElement("div");
+      bar.className = "trend-bar " + tone;
+      bar.style.width = Math.max(4, Math.round((count / maxCount) * 100)) + "%";
+      if (count === 0) bar.style.width = "0%";
+      barWrap.appendChild(bar);
+      row.appendChild(barWrap);
+
+      var info = document.createElement("div");
+      info.className = "trend-info";
+      info.innerHTML = "<b>" + count + "회</b> " + (hasSolo ? "<span class='solo-mark'>혼술</span> " : "") +
+        (mergedAmount ? mergedAmount : "");
+      row.appendChild(info);
+
+      container.appendChild(row);
+    });
   }
 
   // ---------- 렌더: 달력 ----------
@@ -447,6 +529,7 @@
     renderCalendar();
     renderWeekTypeSummary();
     renderMonthTypeSummary();
+    renderTrend();
     renderLogList();
   }
 
