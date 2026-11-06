@@ -78,10 +78,11 @@
   .cal-day {
     aspect-ratio: 1; border-radius: 9px; background: var(--card2);
     display: flex; flex-direction: column; align-items: center; justify-content: center;
-    font-size: 0.8em; position: relative; color: var(--text);
+    font-size: 0.8em; position: relative; color: var(--text); cursor: pointer;
   }
-  .cal-day.empty { background: transparent; }
+  .cal-day.empty { background: transparent; cursor: default; }
   .cal-day.today { outline: 2px solid var(--muted); }
+  .cal-day.picked { outline: 2px solid var(--ok); }
   .cal-day .dots { display: flex; gap: 2px; margin-top: 3px; }
   .cal-day .dot { width: 6px; height: 6px; border-radius: 50%; }
   .cal-day.has-solo { box-shadow: inset 0 0 0 2px var(--solo); }
@@ -145,6 +146,17 @@
   .situation-pick label[data-sit="lunch"].active { border-color: var(--lunch); background: #3a311c; }
   .situation-pick label[data-sit="appointment"].active { border-color: var(--appointment); background: #1c2c3a; }
   .situation-pick label[data-sit="solo"].active { border-color: var(--solo); background: #3a1c1e; }
+
+  /* 주종 선택 */
+  .type-pick { display: flex; gap: 8px; flex-wrap: wrap; }
+  .type-pick label {
+    flex: 1; min-width: 70px; text-align: center; padding: 10px 4px; border-radius: 10px;
+    background: var(--card2); border: 2px solid transparent; cursor: pointer;
+    font-size: 0.9em; color: var(--muted);
+  }
+  .type-pick input { display: none; }
+  .type-pick input:checked + span { color: var(--text); font-weight: 700; }
+  .type-pick label.active { border-color: var(--appointment); background: #1c2c3a; }
 
   button.primary {
     width: 100%; padding: 13px; border: none; border-radius: 10px;
@@ -267,7 +279,13 @@
     </div>
     <div class="field">
       <label>주종</label>
-      <input type="text" id="fType" placeholder="예: 막걸리, 소주, 맥주">
+      <div class="type-pick" id="typePick">
+        <label data-type="막걸리" class="active"><input type="radio" name="drinkTypePick" value="막걸리" checked><span>막걸리</span></label>
+        <label data-type="소주"><input type="radio" name="drinkTypePick" value="소주"><span>소주</span></label>
+        <label data-type="맥주"><input type="radio" name="drinkTypePick" value="맥주"><span>맥주</span></label>
+        <label data-type="기타"><input type="radio" name="drinkTypePick" value="기타"><span>기타</span></label>
+      </div>
+      <input type="text" id="fType" placeholder="예: 소주+맥주 폭탄주" style="display:none; margin-top:8px;">
     </div>
     <div class="field">
       <label>양</label>

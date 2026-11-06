@@ -339,7 +339,12 @@
       var dateStr = y + "-" + String(m + 1).padStart(2, "0") + "-" + String(d).padStart(2, "0");
       var cell = document.createElement("div");
       cell.className = "cal-day";
+      cell.dataset.date = dateStr;
       if (dateStr === todayS) cell.classList.add("today");
+      if (dateStr === document.getElementById("fDate").value) cell.classList.add("picked");
+      cell.addEventListener("click", function () {
+        selectDateForAdd(this.dataset.date);
+      });
 
       var entries = byDate[dateStr] || [];
       if (entries.length) {
@@ -367,6 +372,15 @@
 
       grid.appendChild(cell);
     }
+  }
+
+  function selectDateForAdd(dateStr) {
+    // 달력에서 날짜를 누르면 기록추가 폼의 날짜칸에 바로 적용된다(관리자님 요청,
+    // 2026-11-06 - "달력에서 선택해도 바로 적용되게 해줘").
+    document.getElementById("fDate").value = dateStr;
+    renderCalendar();
+    document.getElementById("addForm").scrollIntoView({ behavior: "smooth", block: "start" });
+    showToast(dateStr + " 선택됨");
   }
 
   document.getElementById("prevMonth").addEventListener("click", function () {
@@ -441,11 +455,31 @@
     });
   });
 
+  // 주종 선택 - 막걸리/소주/맥주는 버튼 선택만으로 끝나고, "기타"를 고르면 지금처럼
+  // 수기 입력칸(fType)이 나타난다(관리자님 요청, 2026-11-06 - "소주+맥주 폭탄주
+  // 8잔" 같은 조합 메뉴는 기타로 직접 쓰면 됨).
+  var typePick = document.getElementById("typePick");
+  var fTypeInput = document.getElementById("fType");
+  typePick.querySelectorAll("label").forEach(function (lbl) {
+    lbl.addEventListener("click", function () {
+      typePick.querySelectorAll("label").forEach(function (l) { l.classList.remove("active"); });
+      lbl.classList.add("active");
+      var isEtc = lbl.dataset.type === "기타";
+      fTypeInput.style.display = isEtc ? "" : "none";
+      if (isEtc) {
+        fTypeInput.focus();
+      } else {
+        fTypeInput.value = "";
+      }
+    });
+  });
+
   document.getElementById("addForm").addEventListener("submit", function (e) {
     e.preventDefault();
     var date = document.getElementById("fDate").value || todayStr();
     var situation = situationPick.querySelector("input:checked").value;
-    var drinkType = document.getElementById("fType").value.trim();
+    var pickedType = typePick.querySelector("input:checked").value;
+    var drinkType = pickedType === "기타" ? fTypeInput.value.trim() : pickedType;
     var amount = document.getElementById("fAmount").value.trim();
     var memo = document.getElementById("fMemo").value.trim();
 
@@ -460,7 +494,11 @@
     });
     saveLog(log);
 
-    document.getElementById("fType").value = "";
+    fTypeInput.value = "";
+    fTypeInput.style.display = "none";
+    typePick.querySelectorAll("label").forEach(function (l) { l.classList.remove("active"); });
+    typePick.querySelector('label[data-type="막걸리"]').classList.add("active");
+    typePick.querySelector('input[value="막걸리"]').checked = true;
     document.getElementById("fAmount").value = "";
     document.getElementById("fMemo").value = "";
 
