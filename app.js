@@ -2,6 +2,7 @@
   "use strict";
 
   var STORAGE_KEY = "drinkLog_v1";
+  var MODERATION_START = "2026-11-08"; // 절주 시작일 - 혼술/금주 기록이 하나도 없을 때 이 날부터 D+로 센다
   var SITUATIONS = {
     lunch: { label: "점심 막걸리", color: "#f4b942" },
     appointment: { label: "술 약속", color: "#4a90d9" },
@@ -140,24 +141,17 @@
       return matches[0].date;
     }
 
-    var lastSolo = lastDateOf(function (r) { return r.situation === "solo"; });
-    var lastAny = lastDateOf(function () { return true; });
+    // 혼술/음주 기록이 아직 하나도 없으면(예: 절주 시작 직후) "기록 없음" 대신
+    // 절주 시작일(MODERATION_START)부터 센다 - 2026-11-10 관리자님 요청, "지금
+    // 이틀밖에 안되긴 했지만"이라고 직접 D+2를 기대하는 발언에서 확인.
+    var lastSolo = lastDateOf(function (r) { return r.situation === "solo"; }) || MODERATION_START;
+    var lastAny = lastDateOf(function () { return true; }) || MODERATION_START;
 
-    var soloEl = document.getElementById("soloStreak");
-    if (lastSolo) {
-      var n1 = daysBetween(parseDate(lastSolo), parseDate(todayS));
-      soloEl.textContent = n1 + "일째";
-    } else {
-      soloEl.textContent = "기록 없음";
-    }
+    var n1 = daysBetween(parseDate(lastSolo), parseDate(todayS));
+    document.getElementById("soloStreak").textContent = "D+" + n1;
 
-    var anyEl = document.getElementById("anyStreak");
-    if (lastAny) {
-      var n2 = daysBetween(parseDate(lastAny), parseDate(todayS));
-      anyEl.textContent = n2 + "일째";
-    } else {
-      anyEl.textContent = "기록 없음";
-    }
+    var n2 = daysBetween(parseDate(lastAny), parseDate(todayS));
+    document.getElementById("anyStreak").textContent = "D+" + n2;
   }
 
   // ---------- 주종별 요약 (이번 주 / 달력에 보이는 달) ----------
