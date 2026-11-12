@@ -601,6 +601,46 @@
     try { localStorage.setItem(EX_GOAL_KEY, String(n)); } catch (e) {}
   }
 
+  // 목표 변경 이력: [{from:"YYYY-MM-DD", goal:N}] — 목표를 바꿔도 지난 날짜 판정은 그대로 유지
+  var EX_GOAL_HIST_KEY = "exerciseGoalHist_v1";
+  // 이 날짜부터 못 채운 개수가 다음 날로 이월된다 (그 이전 날짜는 이월 없음)
+  var EX_CARRY_START = "2026-11-12";
+  function loadGoalHist() {
+    try {
+      var arr = JSON.parse(localStorage.getItem(EX_GOAL_HIST_KEY) || "null");
+      if (Array.isArray(arr) && arr.length) return arr;
+    } catch (e) {}
+    var init = [{ from: "0000-00-00", goal: loadExGoal() }];
+    try { localStorage.setItem(EX_GOAL_HIST_KEY, JSON.stringify(init)); } catch (e) {}
+    return init;
+  }
+  function setGoalFrom(dateStr, n) {
+    var h = loadGoalHist().filter(function (x) { return x.from !== dateStr; });
+    h.push({ from: dateStr, goal: n });
+    h.sort(function (a, b) { return a.from < b.from ? -1 : 1; });
+    try { localStorage.setItem(EX_GOAL_HIST_KEY, JSON.stringify(h)); } catch (e) {}
+    saveExGoal(n);
+  }
+  function baseGoalOn(dateStr) {
+    var h = loadGoalHist(), g = h[0].goal;
+    h.forEach(function (x) { if (x.from <= dateStr) g = x.goal; });
+    return g;
+  }
+  // 해당 날짜의 {base, carry, need}. need = 기본 목표 + 전날까지 못 채운 이월분
+  function exNeed(dateStr) {
+    var base = baseGoalOn(dateStr);
+    if (dateStr <= EX_CARRY_START) return { base: base, carry: 0, need: base };
+    var d = new Date(EX_CARRY_START + "T00:00:00");
+    var carry = 0, ds = EX_CARRY_START;
+    while (ds < dateStr) {
+      var need = baseGoalOn(ds) + carry;
+      carry = Math.max(need - exDayTotal(ds), 0);
+      d = addDays(d, 1);
+      ds = fmtDate(d);
+    }
+    return { base: base, carry: carry, need: base + carry };
+  }
+
   var exLog = loadExLog();
 
   function exDayTotal(dateStr) {
@@ -608,12 +648,13 @@
       .reduce(function (sum, r) { return sum + r.amount; }, 0);
   }
   function exAchieved(dateStr) {
-    return exDayTotal(dateStr) >= loadExGoal();
+    return exDayTotal(dateStr) >= exNeed(dateStr).need;
   }
 
   function renderExToday() {
-    var goal = loadExGoal();
     var today = todayStr();
+    var nd = exNeed(today);
+    var goal = nd.need;
     var total = exDayTotal(today);
     var remain = Math.max(goal - total, 0);
     var done = total >= goal;
@@ -623,10 +664,12 @@
     countEl.className = "count " + (done ? "ok" : "caution");
 
     document.getElementById("exGoalLine").textContent =
-      "목표 " + goal + "개 중 " + total + "개 완료";
+      (nd.carry > 0
+        ? "목표 " + nd.base + " + 이월 " + nd.carry + " = " + goal + "개 중 " + total + "개 완료"
+        : "목표 " + goal + "개 중 " + total + "개 완료");
 
     document.getElementById("exDoneBanner").classList.toggle("show", done);
-    document.getElementById("exCurrentGoal").textContent = goal;
+    document.getElementById("exCurrentGoal").textContent = nd.base;
   }
 
   // 오늘 아직 달성 전이면 어제부터, 오늘 이미 달성했으면 오늘부터 거슬러 올라가며
@@ -660,7 +703,6 @@
     var y = exCalCursor.getFullYear(), m = exCalCursor.getMonth();
     document.getElementById("exCalTitle").textContent = y + "년 " + (m + 1) + "월";
 
-    var goal = loadExGoal();
     var first = new Date(y, m, 1);
     var startOffset = (first.getDay() === 0) ? 6 : first.getDay() - 1;
     var daysInMonth = new Date(y, m + 1, 0).getDate();
@@ -682,6 +724,7 @@
       if (dateStr === todayS) cell.classList.add("today");
 
       var total = exDayTotal(dateStr);
+      var goal = dateStr <= todayS ? exNeed(dateStr).need : baseGoalOn(dateStr);
       var done = total >= goal;
       if (done) cell.classList.add("ex-done");
 
@@ -790,14 +833,14 @@
       alert("1 이상의 숫자를 입력해주세요.");
       return;
     }
-    saveExGoal(n);
+    setGoalFrom(todayStr(), n);
     input.value = "";
     renderExAll();
     showToast("목표를 " + n + "개로 설정했습니다");
   });
 
   document.getElementById("exExportBtn").addEventListener("click", function () {
-    var data = { goal: loadExGoal(), log: exLog };
+    var data = { goal: loadExGoal(), goalHist: loadGoalHist(), log: exLog };
     var blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
     var url = URL.createObjectURL(blob);
     var a = document.createElement("a");
@@ -830,6 +873,7 @@
         });
         exLog = Object.values(byId);
         saveExLog(exLog);
+        if (imported && imported.goalHist) { try { localStorage.setItem(EX_GOAL_HIST_KEY, JSON.stringify(imported.goalHist)); } catch (e2) {} }
         if (imported && imported.goal) saveExGoal(imported.goal);
         renderExAll();
         showToast(importedLog.length + "건 가져왔습니다");
@@ -1174,7 +1218,7 @@
       version: 1,
       exportedAt: new Date().toISOString(),
       drink: log,
-      exercise: { goal: loadExGoal(), log: exLog },
+      exercise: { goal: loadExGoal(), goalHist: loadGoalHist(), log: exLog },
       weight: wtLog
     };
     var blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
@@ -1213,6 +1257,7 @@
         if (d.exercise) {
           exLog = mergeById(exLog, d.exercise.log || []);
           saveExLog(exLog);
+          if (d.exercise.goalHist) { try { localStorage.setItem(EX_GOAL_HIST_KEY, JSON.stringify(d.exercise.goalHist)); } catch (e2) {} }
           if (d.exercise.goal) saveExGoal(d.exercise.goal);
         }
         wtLog = mergeById(wtLog, d.weight || []);

@@ -1,7 +1,7 @@
 // 네트워크 우선 서비스워커 - 온라인이면 항상 최신 파일, 오프라인일 때만 캐시로 연다.
 // (캐시 우선이었을 때 아이콘/매니페스트가 옛날 것으로 남는 문제가 있었음)
 // 데이터는 전부 localStorage에 있으므로 여기서 캐시하는 건 앱 껍데기(HTML/JS/매니페스트/아이콘)뿐이다.
-var CACHE_NAME = "drinklog-v10";
+var CACHE_NAME = "drinklog-v11";
 var ASSETS = [
   "./",
   "./index.html",
