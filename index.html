@@ -210,6 +210,15 @@
   .cal-day.ex-done { box-shadow: inset 0 0 0 2px var(--ok); background: rgba(63,185,80,0.18); }
   .ex-progress { font-size: 0.6em; color: var(--muted); margin-top: 2px; }
   .ex-done-label { font-size: 0.6em; color: var(--ok); font-weight: 800; margin-top: 2px; }
+
+  /* 체중 */
+  .wt-latest { display: flex; gap: 10px; }
+  .wt-latest .streak { flex: 1; }
+  .wt-latest .num { font-size: 1.3em; }
+  .wt-fields { display: flex; gap: 8px; }
+  .wt-fields .field { flex: 1; margin-bottom: 0; }
+  .trend-chart-wrap { margin-top: 4px; }
+  .trend-minmax { font-size: 0.72em; color: var(--muted); margin-top: 4px; text-align: right; }
 </style>
 </head>
 <body>
@@ -219,6 +228,7 @@
   <div class="tabbar" id="tabBar">
     <button class="tab-btn active" data-tab="drink" type="button">🍶 금주</button>
     <button class="tab-btn" data-tab="exercise" type="button">💪 운동</button>
+    <button class="tab-btn" data-tab="weight" type="button">⚖️ 체중</button>
   </div>
 </header>
 
@@ -402,6 +412,66 @@
     <button class="secondary" type="button" id="exImportBtn">📥 가져오기 (JSON)</button>
   </div>
   <input type="file" id="exImportFile" accept="application/json">
+</div>
+
+</section>
+
+<section id="tab-weight" class="tab-panel">
+
+<div class="card">
+  <div class="wt-latest">
+    <div class="streak">
+      <div class="num" id="wtLatestWeight">-</div>
+      <div class="lbl">체중 <span id="wtLatestWeightDate"></span></div>
+    </div>
+    <div class="streak">
+      <div class="num" id="wtLatestFat">-</div>
+      <div class="lbl">체지방률 <span id="wtLatestFatDate"></span></div>
+    </div>
+  </div>
+  <form id="wtAddForm" style="margin-top:12px;">
+    <div class="field">
+      <label>날짜</label>
+      <input type="date" id="wtDate" required>
+    </div>
+    <div class="wt-fields">
+      <div class="field">
+        <label>체중 (kg)</label>
+        <input type="number" id="wtWeight" step="0.1" min="0" placeholder="예: 70.5">
+      </div>
+      <div class="field">
+        <label>체지방률 (%)</label>
+        <input type="number" id="wtFat" step="0.1" min="0" placeholder="예: 18.5">
+      </div>
+    </div>
+    <button type="submit" class="primary">기록 추가</button>
+  </form>
+</div>
+
+<div class="card">
+  <h2>체중 추이</h2>
+  <div class="trend-chart-wrap" id="wtWeightChart"></div>
+  <div class="trend-minmax" id="wtWeightMinMax"></div>
+</div>
+
+<div class="card">
+  <h2>체지방률 추이</h2>
+  <div class="trend-chart-wrap" id="wtFatChart"></div>
+  <div class="trend-minmax" id="wtFatMinMax"></div>
+</div>
+
+<div class="card">
+  <h2>최근 기록</h2>
+  <div id="wtLogList"></div>
+</div>
+
+<div class="card">
+  <h2>백업</h2>
+  <div class="io-row">
+    <button class="secondary" type="button" id="wtExportBtn">📤 내보내기 (JSON)</button>
+    <button class="secondary" type="button" id="wtImportBtn">📥 가져오기 (JSON)</button>
+  </div>
+  <input type="file" id="wtImportFile" accept="application/json">
 </div>
 
 </section>

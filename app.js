@@ -848,9 +848,294 @@
     renderExLogList();
   }
 
+  // ========== 체중 / 체지방률 ==========
+  var WT_LOG_KEY = "weightLog_v1";
+
+  function loadWtLog() {
+    try {
+      var raw = localStorage.getItem(WT_LOG_KEY);
+      if (!raw) return [];
+      var arr = JSON.parse(raw);
+      return Array.isArray(arr) ? arr : [];
+    } catch (e) {
+      console.warn("체중 기록 불러오기 실패", e);
+      return [];
+    }
+  }
+  function saveWtLog(l) {
+    try {
+      localStorage.setItem(WT_LOG_KEY, JSON.stringify(l));
+    } catch (e) {
+      alert("저장에 실패했습니다: " + e);
+    }
+  }
+
+  var wtLog = loadWtLog();
+
+  // 같은 날짜에 체중만 혹은 체지방률만 따로 입력해도, 입력한 값만 그 날짜
+  // 기록에 덮어써서 합쳐준다(둘 다 한 번에 입력 안 해도 되게).
+  function wtUpsert(date, weight, fat) {
+    var existing = wtLog.find(function (r) { return r.date === date; });
+    if (existing) {
+      if (weight !== null) existing.weight = weight;
+      if (fat !== null) existing.fat = fat;
+      existing.createdAt = new Date().toISOString();
+    } else {
+      wtLog.push({
+        id: uid(),
+        date: date,
+        weight: weight,
+        fat: fat,
+        createdAt: new Date().toISOString()
+      });
+    }
+    saveWtLog(wtLog);
+  }
+
+  function wtSortedByField(field) {
+    return wtLog.filter(function (r) { return r[field] !== null && r[field] !== undefined; })
+      .slice()
+      .sort(function (a, b) { return a.date < b.date ? 1 : -1; });
+  }
+
+  function renderWtLatest() {
+    var wSorted = wtSortedByField("weight");
+    var weightEl = document.getElementById("wtLatestWeight");
+    var weightDateEl = document.getElementById("wtLatestWeightDate");
+    if (wSorted.length) {
+      var cur = wSorted[0].weight;
+      var delta = "";
+      if (wSorted.length > 1) {
+        var diff = cur - wSorted[1].weight;
+        delta = " (" + (diff > 0 ? "+" : "") + diff.toFixed(1) + ")";
+      }
+      weightEl.textContent = cur.toFixed(1) + "kg" + delta;
+      weightDateEl.textContent = "· " + wSorted[0].date;
+    } else {
+      weightEl.textContent = "-";
+      weightDateEl.textContent = "";
+    }
+
+    var fSorted = wtSortedByField("fat");
+    var fatEl = document.getElementById("wtLatestFat");
+    var fatDateEl = document.getElementById("wtLatestFatDate");
+    if (fSorted.length) {
+      var curF = fSorted[0].fat;
+      var deltaF = "";
+      if (fSorted.length > 1) {
+        var diffF = curF - fSorted[1].fat;
+        deltaF = " (" + (diffF > 0 ? "+" : "") + diffF.toFixed(1) + ")";
+      }
+      fatEl.textContent = curF.toFixed(1) + "%" + deltaF;
+      fatDateEl.textContent = "· " + fSorted[0].date;
+    } else {
+      fatEl.textContent = "-";
+      fatDateEl.textContent = "";
+    }
+  }
+
+  // 외부 차트 라이브러리 없이 가벼운 인라인 SVG 선그래프로 그린다(오프라인 PWA라
+  // 서비스워커 캐시 대상에 CDN 의존성을 추가하지 않으려는 의도).
+  function renderTrendChart(chartContainerId, minMaxContainerId, field, colorVar) {
+    var points = wtLog.filter(function (r) { return r[field] !== null && r[field] !== undefined; })
+      .slice()
+      .sort(function (a, b) { return a.date < b.date ? -1 : 1; })
+      .map(function (r) { return { date: r.date, value: r[field] }; });
+
+    var chartEl = document.getElementById(chartContainerId);
+    var minMaxEl = document.getElementById(minMaxContainerId);
+    chartEl.innerHTML = "";
+
+    if (points.length < 2) {
+      minMaxEl.textContent = points.length === 1
+        ? "기록 1개 (" + points[0].date + " · " + points[0].value.toFixed(1) + ")"
+        : "기록이 2개 이상 쌓이면 그래프가 보여요.";
+      return;
+    }
+
+    var w = 300, h = 110, padX = 10, padY = 16;
+    var values = points.map(function (p) { return p.value; });
+    var min = Math.min.apply(null, values);
+    var max = Math.max.apply(null, values);
+    if (min === max) { min -= 1; max += 1; }
+    var stepX = (w - padX * 2) / (points.length - 1);
+    var xy = points.map(function (p, i) {
+      return {
+        x: padX + i * stepX,
+        y: padY + (1 - (p.value - min) / (max - min)) * (h - padY * 2),
+        p: p
+      };
+    });
+
+    var NS = "http://www.w3.org/2000/svg";
+    var svg = document.createElementNS(NS, "svg");
+    svg.setAttribute("viewBox", "0 0 " + w + " " + h);
+    svg.setAttribute("preserveAspectRatio", "none");
+    svg.style.width = "100%";
+    svg.style.height = "100px";
+
+    var polyline = document.createElementNS(NS, "polyline");
+    polyline.setAttribute("points", xy.map(function (c) { return c.x.toFixed(1) + "," + c.y.toFixed(1); }).join(" "));
+    polyline.setAttribute("fill", "none");
+    polyline.setAttribute("stroke", colorVar);
+    polyline.setAttribute("stroke-width", "2");
+    polyline.setAttribute("stroke-linecap", "round");
+    polyline.setAttribute("stroke-linejoin", "round");
+    polyline.setAttribute("vector-effect", "non-scaling-stroke");
+    svg.appendChild(polyline);
+
+    xy.forEach(function (c, i) {
+      var isEndpoint = (i === 0 || i === xy.length - 1);
+      var circle = document.createElementNS(NS, "circle");
+      circle.setAttribute("cx", c.x.toFixed(1));
+      circle.setAttribute("cy", c.y.toFixed(1));
+      circle.setAttribute("r", isEndpoint ? "4" : "2.5");
+      circle.setAttribute("fill", colorVar);
+      var title = document.createElementNS(NS, "title");
+      title.textContent = c.p.date + " · " + c.p.value.toFixed(1);
+      circle.appendChild(title);
+      svg.appendChild(circle);
+
+      if (isEndpoint) {
+        var text = document.createElementNS(NS, "text");
+        text.setAttribute("x", c.x.toFixed(1));
+        text.setAttribute("y", (c.y - 8).toFixed(1));
+        text.setAttribute("text-anchor", i === 0 ? "start" : "end");
+        text.setAttribute("font-size", "9");
+        text.setAttribute("fill", "var(--muted)");
+        text.textContent = c.p.value.toFixed(1);
+        svg.appendChild(text);
+      }
+    });
+
+    chartEl.appendChild(svg);
+    minMaxEl.textContent = "최저 " + min.toFixed(1) + " · 최고 " + max.toFixed(1) + " · 최근 " + values[values.length - 1].toFixed(1);
+  }
+
+  function renderWtLogList() {
+    var container = document.getElementById("wtLogList");
+    container.innerHTML = "";
+    if (!wtLog.length) {
+      var empty = document.createElement("div");
+      empty.className = "empty-note";
+      empty.textContent = "아직 기록이 없습니다.";
+      container.appendChild(empty);
+      return;
+    }
+    var sorted = wtLog.slice().sort(function (a, b) { return a.date < b.date ? 1 : -1; });
+    sorted.slice(0, 30).forEach(function (r) {
+      var item = document.createElement("div");
+      item.className = "log-item";
+
+      var tag = document.createElement("div");
+      tag.className = "tag";
+      tag.style.background = "var(--appointment)";
+      item.appendChild(tag);
+
+      var info = document.createElement("div");
+      info.className = "info";
+      var dateEl = document.createElement("div");
+      dateEl.className = "date";
+      var parts = [];
+      if (r.weight !== null && r.weight !== undefined) parts.push(r.weight.toFixed(1) + "kg");
+      if (r.fat !== null && r.fat !== undefined) parts.push(r.fat.toFixed(1) + "%");
+      dateEl.textContent = r.date + " · " + (parts.join(" / ") || "-");
+      info.appendChild(dateEl);
+      item.appendChild(info);
+
+      var del = document.createElement("button");
+      del.className = "del";
+      del.textContent = "✕";
+      del.addEventListener("click", function () {
+        if (!confirm("이 기록을 삭제할까요?\n" + r.date)) return;
+        wtLog = wtLog.filter(function (x) { return x.id !== r.id; });
+        saveWtLog(wtLog);
+        renderWtAll();
+        showToast("삭제했습니다");
+      });
+      item.appendChild(del);
+
+      container.appendChild(item);
+    });
+  }
+
+  document.getElementById("wtDate").value = todayStr();
+
+  document.getElementById("wtAddForm").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var date = document.getElementById("wtDate").value || todayStr();
+    var weightInput = document.getElementById("wtWeight");
+    var fatInput = document.getElementById("wtFat");
+    var weight = weightInput.value.trim() === "" ? null : parseFloat(weightInput.value);
+    var fat = fatInput.value.trim() === "" ? null : parseFloat(fatInput.value);
+
+    if (weight === null && fat === null) {
+      alert("체중 또는 체지방률 중 하나는 입력해주세요.");
+      return;
+    }
+
+    wtUpsert(date, weight, fat);
+
+    weightInput.value = "";
+    fatInput.value = "";
+    renderWtAll();
+    showToast("기록을 추가했습니다");
+  });
+
+  document.getElementById("wtExportBtn").addEventListener("click", function () {
+    var blob = new Blob([JSON.stringify(wtLog, null, 2)], { type: "application/json" });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = "weightlog_" + todayStr() + ".json";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast("내보냈습니다");
+  });
+
+  document.getElementById("wtImportBtn").addEventListener("click", function () {
+    document.getElementById("wtImportFile").click();
+  });
+
+  document.getElementById("wtImportFile").addEventListener("change", function (e) {
+    var file = e.target.files[0];
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function () {
+      try {
+        var imported = JSON.parse(reader.result);
+        if (!Array.isArray(imported)) throw new Error("JSON 배열이 아닙니다");
+        var byId = {};
+        wtLog.forEach(function (r) { byId[r.id] = r; });
+        imported.forEach(function (r) {
+          if (!r.id) r.id = uid();
+          byId[r.id] = r;
+        });
+        wtLog = Object.values(byId);
+        saveWtLog(wtLog);
+        renderWtAll();
+        showToast(imported.length + "건 가져왔습니다");
+      } catch (err) {
+        alert("가져오기 실패: " + err.message);
+      }
+      e.target.value = "";
+    };
+    reader.readAsText(file);
+  });
+
+  function renderWtAll() {
+    renderWtLatest();
+    renderTrendChart("wtWeightChart", "wtWeightMinMax", "weight", "var(--appointment)");
+    renderTrendChart("wtFatChart", "wtFatMinMax", "fat", "var(--lunch)");
+    renderWtLogList();
+  }
+
   // ---------- 탭 전환 ----------
   var tabButtons = document.querySelectorAll(".tab-btn");
   var tabPanels = document.querySelectorAll(".tab-panel");
+  var VALID_TABS = ["drink", "exercise", "weight"];
   function switchTab(tab) {
     tabButtons.forEach(function (b) { b.classList.toggle("active", b.dataset.tab === tab); });
     tabPanels.forEach(function (p) { p.classList.toggle("active", p.id === "tab-" + tab); });
@@ -864,11 +1149,12 @@
   renderAll();
   renderExCalendarHeader();
   renderExAll();
+  renderWtAll();
 
   var savedTab = "drink";
   try {
     var st = localStorage.getItem("activeTab_v1");
-    if (st === "exercise" || st === "drink") savedTab = st;
+    if (VALID_TABS.indexOf(st) !== -1) savedTab = st;
   } catch (e) {}
   switchTab(savedTab);
 
