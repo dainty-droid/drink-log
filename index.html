@@ -218,15 +218,21 @@
   .wt-fields { display: flex; gap: 14px; justify-content: center; margin-bottom: 14px; }
   .wt-fields .field { flex: 0 1 150px; margin-bottom: 0; }
   .wt-fields .field label { text-align: center; }
-  .wt-fields input[type="number"] {
+  /* 큰 숫자 입력칸 (체중/운동 공통) */
+  .num-field { max-width: 200px; margin: 10px auto 14px; }
+  .num-field label { text-align: center; }
+  .wt-fields input[type="number"],
+  .num-field input[type="number"] {
     width: 100%; height: 64px;
     background: var(--card2); border: 1px solid var(--line);
     color: var(--text); border-radius: 12px; padding: 0 8px;
     font-size: 1.5em; font-weight: 700; text-align: center;
     font-family: inherit;
   }
-  .wt-fields input[type="number"]::placeholder { color: var(--muted); font-size: 0.6em; font-weight: 400; }
-  .wt-fields input[type="number"]:focus { outline: none; border-color: var(--appointment); }
+  .wt-fields input[type="number"]::placeholder,
+  .num-field input[type="number"]::placeholder { color: var(--muted); font-size: 0.6em; font-weight: 400; }
+  .wt-fields input[type="number"]:focus,
+  .num-field input[type="number"]:focus { outline: none; border-color: var(--appointment); }
   .trend-chart-wrap { margin-top: 4px; }
   .trend-minmax { font-size: 0.72em; color: var(--muted); margin-top: 4px; text-align: right; }
 </style>
@@ -371,7 +377,7 @@
   </div>
   <div class="banner banner-green" id="exDoneBanner">🎉 오늘 목표 달성!!</div>
   <form id="exAddForm">
-    <div class="field" style="margin-top:10px;">
+    <div class="field num-field">
       <label>오늘 한 갯수</label>
       <input type="number" id="exAmount" min="1" placeholder="예: 30" required>
     </div>
@@ -403,7 +409,7 @@
 
 <div class="card">
   <h2>목표 설정</h2>
-  <div class="field">
+  <div class="field num-field">
     <label>하루 목표 (현재 <span id="exCurrentGoal"></span>개)</label>
     <input type="number" id="exGoalInput" min="1" placeholder="예: 200">
   </div>
