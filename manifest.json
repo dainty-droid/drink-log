@@ -1,7 +1,7 @@
 {
-  "name": "음주기록",
-  "short_name": "음주기록",
-  "description": "절주 기록 - 음주 달력, 주간 카운트, 연속 기록",
+  "name": "자기관리",
+  "short_name": "자기관리",
+  "description": "절주 기록 + 운동 목표 관리 - 음주 달력, 주간 카운트, 연속 기록, 운동 목표치 달성",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
