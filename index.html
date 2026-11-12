@@ -235,6 +235,20 @@
   .num-field input[type="number"]:focus { outline: none; border-color: var(--appointment); }
   .trend-chart-wrap { margin-top: 4px; }
   .trend-minmax { font-size: 0.72em; color: var(--muted); margin-top: 4px; text-align: right; }
+
+  /* 전체 백업 */
+  .backup-banner {
+    display: none; align-items: center; justify-content: space-between; gap: 10px;
+    margin: 12px 16px 0; padding: 10px 12px; border-radius: 10px;
+    background: #3a311c; color: #ffd98a; border: 1px solid var(--lunch);
+    font-size: 0.85em; font-weight: 700;
+  }
+  .backup-banner.show { display: flex; }
+  .backup-banner button {
+    flex-shrink: 0; border: none; border-radius: 8px; padding: 8px 12px;
+    background: var(--lunch); color: #2a1f05; font-weight: 800; font-size: 0.95em;
+  }
+  .backup-last { font-size: 0.78em; color: var(--muted); margin: -4px 0 10px; }
 </style>
 </head>
 <body>
@@ -247,6 +261,11 @@
     <button class="tab-btn" data-tab="weight" type="button">⚖️ 체중</button>
   </div>
 </header>
+
+<div class="backup-banner" id="backupBanner">
+  <span id="backupBannerText">아직 전체 백업을 한 적이 없어요</span>
+  <button type="button" id="backupBannerBtn">지금 백업</button>
+</div>
 
 <section id="tab-drink" class="tab-panel active">
 <p class="subtitle" style="margin:0 16px 10px;">2026-11-08부터 절주 중 — 혼술 금지, 주 1회(최대 2회)</p>
@@ -491,6 +510,16 @@
 </div>
 
 </section>
+
+<div class="card">
+  <h2>📦 전체 백업 (금주 + 운동 + 체중)</h2>
+  <div class="backup-last" id="backupLast"></div>
+  <div class="io-row">
+    <button class="secondary" type="button" id="allExportBtn">📤 전체 내보내기</button>
+    <button class="secondary" type="button" id="allImportBtn">📥 전체 가져오기</button>
+  </div>
+  <input type="file" id="allImportFile" accept="application/json">
+</div>
 
 <div class="toast" id="toast"></div>
 

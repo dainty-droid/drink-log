@@ -1132,6 +1132,105 @@
     renderWtLogList();
   }
 
+  // ========== 전체 백업 (세 탭을 한 파일로) ==========
+  var LAST_BACKUP_KEY = "lastFullBackupAt_v1";
+  var BACKUP_REMIND_DAYS = 7;
+
+  function mergeById(current, imported) {
+    var byId = {};
+    current.forEach(function (r) { byId[r.id] = r; });
+    imported.forEach(function (r) {
+      if (!r.id) r.id = uid();
+      byId[r.id] = r; // 같은 id면 가져온 쪽으로 덮어씀
+    });
+    return Object.values(byId);
+  }
+
+  function loadLastBackup() {
+    try { return localStorage.getItem(LAST_BACKUP_KEY) || null; } catch (e) { return null; }
+  }
+
+  // 마지막 전체 백업 후 7일이 지났으면 상단 배너를 띄운다
+  function renderBackupStatus() {
+    var last = loadLastBackup();
+    var banner = document.getElementById("backupBanner");
+    var bannerText = document.getElementById("backupBannerText");
+    var lastEl = document.getElementById("backupLast");
+    if (!last) {
+      bannerText.textContent = "아직 전체 백업을 한 적이 없어요";
+      lastEl.textContent = "마지막 전체 백업: 없음";
+      banner.classList.add("show");
+      return;
+    }
+    var days = Math.floor((Date.now() - new Date(last).getTime()) / 86400000);
+    lastEl.textContent = "마지막 전체 백업: " + last.slice(0, 10) + (days > 0 ? " (" + days + "일 전)" : " (오늘)");
+    bannerText.textContent = "마지막 백업 " + days + "일 전";
+    banner.classList.toggle("show", days >= BACKUP_REMIND_DAYS);
+  }
+
+  function exportAll() {
+    var data = {
+      app: "selfcare",
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      drink: log,
+      exercise: { goal: loadExGoal(), log: exLog },
+      weight: wtLog
+    };
+    var blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = "selfcare_backup_" + todayStr() + ".json";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    try { localStorage.setItem(LAST_BACKUP_KEY, data.exportedAt); } catch (e) {}
+    renderBackupStatus();
+    showToast("전체 백업 파일을 저장했습니다");
+  }
+
+  document.getElementById("allExportBtn").addEventListener("click", exportAll);
+  document.getElementById("backupBannerBtn").addEventListener("click", exportAll);
+
+  document.getElementById("allImportBtn").addEventListener("click", function () {
+    document.getElementById("allImportFile").click();
+  });
+
+  document.getElementById("allImportFile").addEventListener("change", function (e) {
+    var file = e.target.files[0];
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function () {
+      try {
+        var d = JSON.parse(reader.result);
+        if (!d || d.app !== "selfcare") {
+          throw new Error("전체 백업 파일이 아닙니다 (탭별 백업 파일은 각 탭의 가져오기를 쓰세요)");
+        }
+        log = mergeById(log, d.drink || []);
+        saveLog(log);
+        if (d.exercise) {
+          exLog = mergeById(exLog, d.exercise.log || []);
+          saveExLog(exLog);
+          if (d.exercise.goal) saveExGoal(d.exercise.goal);
+        }
+        wtLog = mergeById(wtLog, d.weight || []);
+        saveWtLog(wtLog);
+        renderAll();
+        renderExAll();
+        renderWtAll();
+        showToast("전체 백업을 가져왔습니다");
+      } catch (err) {
+        alert("가져오기 실패: " + err.message);
+      }
+      e.target.value = "";
+    };
+    reader.readAsText(file);
+  });
+
+  renderBackupStatus();
+
   // ---------- 탭 전환 ----------
   var tabButtons = document.querySelectorAll(".tab-btn");
   var tabPanels = document.querySelectorAll(".tab-panel");
