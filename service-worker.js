@@ -1,7 +1,7 @@
-// 네트워크 우선 서비스워커 - 온라인이면 항상 최신 파일, 오프라인일 때만 캐시로 연다.
-// (캐시 우선이었을 때 아이콘/매니페스트가 옛날 것으로 남는 문제가 있었음)
-// 데이터는 전부 localStorage에 있으므로 여기서 캐시하는 건 앱 껍데기(HTML/JS/매니페스트/아이콘)뿐이다.
-var CACHE_NAME = "drinklog-v11";
+﻿// ?ㅽ듃?뚰겕 ?곗꽑 ?쒕퉬?ㅼ썙而?- ?⑤씪?몄씠硫???긽 理쒖떊 ?뚯씪, ?ㅽ봽?쇱씤???뚮쭔 罹먯떆濡??곕떎.
+// (罹먯떆 ?곗꽑?댁뿀?????꾩씠肄?留ㅻ땲?섏뒪?멸? ?쏅궇 寃껋쑝濡??⑤뒗 臾몄젣媛 ?덉뿀??
+// ?곗씠?곕뒗 ?꾨? localStorage???덉쑝誘濡??ш린??罹먯떆?섎뒗 嫄???猿띾뜲湲?HTML/JS/留ㅻ땲?섏뒪???꾩씠肄?肉먯씠??
+var CACHE_NAME = "drinklog-v12";
 var ASSETS = [
   "./",
   "./index.html",
@@ -14,8 +14,7 @@ var ASSETS = [
 self.addEventListener("install", function (event) {
   event.waitUntil(
     caches.open(CACHE_NAME).then(function (cache) {
-      // HTTP 캐시를 거치지 않고 서버에서 새로 받아 저장
-      return cache.addAll(ASSETS.map(function (u) { return new Request(u, { cache: "reload" }); }));
+      // HTTP 罹먯떆瑜?嫄곗튂吏 ?딄퀬 ?쒕쾭?먯꽌 ?덈줈 諛쏆븘 ???      return cache.addAll(ASSETS.map(function (u) { return new Request(u, { cache: "reload" }); }));
     })
   );
   self.skipWaiting();

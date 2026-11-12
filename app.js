@@ -627,17 +627,17 @@
     return g;
   }
   // 해당 날짜의 {base, carry, need}. need = 기본 목표 + 전날까지 못 채운 이월분
+  var exNeedCache = {};
   function exNeed(dateStr) {
+    if (exNeedCache[dateStr]) return exNeedCache[dateStr];
+    return (exNeedCache[dateStr] = exNeedCalc(dateStr));
+  }
+  function exNeedCalc(dateStr) {
     var base = baseGoalOn(dateStr);
     if (dateStr <= EX_CARRY_START) return { base: base, carry: 0, need: base };
-    var d = new Date(EX_CARRY_START + "T00:00:00");
-    var carry = 0, ds = EX_CARRY_START;
-    while (ds < dateStr) {
-      var need = baseGoalOn(ds) + carry;
-      carry = Math.max(need - exDayTotal(ds), 0);
-      d = addDays(d, 1);
-      ds = fmtDate(d);
-    }
+    // 전날 값으로 한 칸만 계산 (캐시 덕분에 날짜마다 한 번씩만 계산됨)
+    var prev = fmtDate(addDays(parseDate(dateStr), -1));
+    var carry = Math.max(exNeed(prev).need - exDayTotal(prev), 0);
     return { base: base, carry: carry, need: base + carry };
   }
 
@@ -669,6 +669,7 @@
         : "목표 " + goal + "개 중 " + total + "개 완료");
 
     document.getElementById("exDoneBanner").classList.toggle("show", done);
+    document.getElementById("exOverLine").textContent = total > goal ? "🔥 목표 초과 +" + (total - goal) + "개" : "";
     document.getElementById("exCurrentGoal").textContent = nd.base;
   }
 
@@ -737,6 +738,12 @@
         lbl.className = "ex-done-label";
         lbl.textContent = "달성!!";
         cell.appendChild(lbl);
+        if (total > goal) {
+          var ov = document.createElement("div");
+          ov.className = "ex-over";
+          ov.textContent = "+" + (total - goal);
+          cell.appendChild(ov);
+        }
       } else if (total > 0) {
         var prog = document.createElement("div");
         prog.className = "ex-progress";
@@ -885,12 +892,163 @@
     reader.readAsText(file);
   });
 
+  // ---------- 통계 (일별/주별/월별 막대그래프) ----------
+  var exStatMode = "day";
+  var exStatAnchor = new Date();
+
+  function startOfWeek(d) { // 월요일 시작
+    var x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    var dow = x.getDay() === 0 ? 6 : x.getDay() - 1;
+    return addDays(x, -dow);
+  }
+  // 기간 집계: 합계, 목표합(기본 목표 기준), 초과합, 달성일, 경과일, 최고 기록
+  function exAgg(from, to) {
+    var todayS = todayStr(), r = { total: 0, goal: 0, over: 0, doneDays: 0, days: 0, best: 0 };
+    var first = exLog.reduce(function (m, x) { return (!m || x.date < m) ? x.date : m; }, "");
+    for (var d = new Date(from); d <= to; d = addDays(d, 1)) {
+      var ds = fmtDate(d);
+      if (ds > todayS) break;
+      if (!first || ds < first) continue; // 운동 시작 전 날짜는 통계에서 제외
+      var t = exDayTotal(ds), nd = exNeed(ds);
+      r.total += t; r.goal += nd.base; r.days++;
+      if (t > r.best) r.best = t;
+      if (t >= nd.need) { r.doneDays++; r.over += t - nd.need; }
+    }
+    return r;
+  }
+  function exStatBuckets() {
+    var a = exStatAnchor, b = [], todayS = todayStr();
+    if (exStatMode === "day") {
+      var y = a.getFullYear(), m = a.getMonth(), n = new Date(y, m + 1, 0).getDate();
+      for (var i = 1; i <= n; i++) {
+        var d = new Date(y, m, i), ds = fmtDate(d);
+        b.push({ from: d, to: d, label: (i === 1 || i % 5 === 0) ? String(i) : "", name: (m + 1) + "/" + i,
+                 goalOverride: ds <= todayS ? exNeed(ds).need : null });
+      }
+      return { title: y + "년 " + (m + 1) + "월", buckets: b, from: new Date(y, m, 1), to: new Date(y, m, n) };
+    }
+    if (exStatMode === "week") {
+      var last = startOfWeek(a), start = addDays(last, -7 * 11), end = addDays(last, 6);
+      for (var k = 0; k < 12; k++) {
+        var f = addDays(start, 7 * k), t = addDays(f, 6);
+        b.push({ from: f, to: t, label: (k % 2 === 0) ? (f.getMonth() + 1) + "/" + f.getDate() : "",
+                 name: (f.getMonth() + 1) + "/" + f.getDate() + "~" + (t.getMonth() + 1) + "/" + t.getDate() });
+      }
+      return { title: (start.getMonth() + 1) + "/" + start.getDate() + " ~ " + (end.getMonth() + 1) + "/" + end.getDate() + " (12주)",
+               buckets: b, from: start, to: end };
+    }
+    var yy = a.getFullYear();
+    for (var mm = 0; mm < 12; mm++) {
+      b.push({ from: new Date(yy, mm, 1), to: new Date(yy, mm + 1, 0), label: String(mm + 1), name: yy + "년 " + (mm + 1) + "월" });
+    }
+    return { title: yy + "년", buckets: b, from: new Date(yy, 0, 1), to: new Date(yy, 11, 31) };
+  }
+
+  function renderExStats() {
+    var info = exStatBuckets();
+    document.getElementById("exStatTitle").textContent = info.title;
+    var rows = info.buckets.map(function (bk) {
+      var g = exAgg(bk.from, bk.to);
+      return { bk: bk, agg: g, goal: bk.goalOverride != null ? bk.goalOverride : g.goal };
+    });
+    var max = 1;
+    rows.forEach(function (r) { max = Math.max(max, r.agg.total, r.goal); });
+
+    var NS = "http://www.w3.org/2000/svg", W = 320, H = 170, top = 14, bottom = 18, ch = H - top - bottom;
+    var n = rows.length, slot = W / n, bw = Math.max(slot * 0.66, 2);
+    var svg = document.createElementNS(NS, "svg");
+    svg.setAttribute("viewBox", "0 0 " + W + " " + H);
+    svg.style.width = "100%"; svg.style.height = "190px"; svg.style.display = "block";
+    function el(tag, attrs) {
+      var e = document.createElementNS(NS, tag);
+      for (var k in attrs) e.setAttribute(k, attrs[k]);
+      svg.appendChild(e); return e;
+    }
+    function y(v) { return top + ch - (v / max) * ch; }
+    el("line", { x1: 0, x2: W, y1: top + ch, y2: top + ch, stroke: "#3a414d", "stroke-width": 1 });
+    el("text", { x: 2, y: 10, fill: "#8b93a1", "font-size": 9 }).textContent = max.toLocaleString();
+    var detail = document.getElementById("exChartDetail");
+    detail.textContent = "막대를 누르면 상세가 보여요";
+
+    rows.forEach(function (r, i) {
+      var x = i * slot + (slot - bw) / 2, t = r.agg.total;
+      var reach = r.goal > 0 && t >= r.goal;
+      var base = reach ? r.goal : t;
+      if (t > 0) {
+        el("rect", { x: x, y: y(base), width: bw, height: Math.max(top + ch - y(base), 0.5),
+                     fill: reach ? "#3fb950" : "#d9822b" });
+        if (reach && t > r.goal) {
+          el("rect", { x: x, y: y(t), width: bw, height: y(r.goal) - y(t), fill: "#f0b429" });
+        }
+      }
+      if (r.goal > 0) {
+        el("line", { x1: x - 1, x2: x + bw + 1, y1: y(r.goal), y2: y(r.goal), stroke: "#e6edf3", "stroke-width": 1.2, opacity: 0.75 });
+      }
+      if (r.bk.label) {
+        el("text", { x: i * slot + slot / 2, y: H - 5, fill: "#8b93a1", "font-size": 9, "text-anchor": "middle" }).textContent = r.bk.label;
+      }
+      var hit = el("rect", { x: i * slot, y: 0, width: slot, height: H, fill: "transparent" });
+      hit.style.cursor = "pointer";
+      hit.addEventListener("click", function () {
+        if (!r.agg.days) { detail.textContent = r.bk.name + " · 아직 안 온 날"; return; }
+        var s = r.bk.name + " · " + t.toLocaleString() + "개 / 목표 " + r.goal.toLocaleString();
+        if (exStatMode !== "day") s += " · 달성 " + r.agg.doneDays + "/" + r.agg.days + "일";
+        if (r.agg.over > 0) s += " · 초과 +" + r.agg.over;
+        else if (exStatMode === "day" && t < r.goal) s += " · 미달 " + (r.goal - t);
+        detail.textContent = s;
+      });
+    });
+    var box = document.getElementById("exChart");
+    box.innerHTML = ""; box.appendChild(svg);
+
+    var all = exAgg(info.from, info.to);
+    var tiles = [
+      ["합계", all.total.toLocaleString() + "개", ""],
+      ["하루 평균", all.days ? Math.round(all.total / all.days) + "개" : "-", ""],
+      ["달성률", all.days ? Math.round(all.doneDays / all.days * 100) + "%" : "-", ""],
+      ["달성일", all.doneDays + "/" + all.days + "일", ""],
+      ["초과 합계", "+" + all.over.toLocaleString(), "over"],
+      ["최고 기록(하루)", all.best + "개", ""]
+    ];
+    var grid = document.getElementById("exStatGrid");
+    grid.innerHTML = "";
+    tiles.forEach(function (tl) {
+      var d = document.createElement("div"); d.className = "stat-tile";
+      var v = document.createElement("div"); v.className = "v " + tl[2]; v.textContent = tl[1];
+      var k = document.createElement("div"); k.className = "k"; k.textContent = tl[0];
+      d.appendChild(v); d.appendChild(k); grid.appendChild(d);
+    });
+  }
+
+  Array.prototype.forEach.call(document.querySelectorAll("#exStatSeg button"), function (btn) {
+    btn.addEventListener("click", function () {
+      exStatMode = btn.getAttribute("data-mode");
+      exStatAnchor = new Date();
+      Array.prototype.forEach.call(document.querySelectorAll("#exStatSeg button"), function (b) {
+        b.classList.toggle("active", b === btn);
+      });
+      renderExStats();
+    });
+  });
+  function shiftExStat(dir) {
+    var a = exStatAnchor;
+    if (exStatMode === "day") exStatAnchor = new Date(a.getFullYear(), a.getMonth() + dir, 1);
+    else if (exStatMode === "week") exStatAnchor = addDays(a, 7 * 12 * dir);
+    else exStatAnchor = new Date(a.getFullYear() + dir, 0, 1);
+    renderExStats();
+  }
+  document.getElementById("exStatPrev").addEventListener("click", function () { shiftExStat(-1); });
+  document.getElementById("exStatNext").addEventListener("click", function () { shiftExStat(1); });
+
   function renderExAll() {
+    exNeedCache = {};
     renderExToday();
     renderExStreak();
     renderExCalendar();
+    renderExStats();
     renderExLogList();
   }
+
 
   // ========== 체중 / 체지방률 ==========
   var WT_LOG_KEY = "weightLog_v1";

@@ -86,6 +86,18 @@
   .cal-day .dots { display: flex; gap: 2px; margin-top: 3px; }
   .cal-day .dot { width: 6px; height: 6px; border-radius: 50%; }
   .cal-day.has-solo { box-shadow: inset 0 0 0 2px var(--solo); }
+  .ex-over-line { color: #f0b429; font-weight: 700; font-size: 0.85em; margin-top: 4px; }
+  .cal-day .ex-over { font-size: 0.62em; color: #f0b429; font-weight: 700; }
+  .seg { display: flex; gap: 6px; margin-bottom: 10px; }
+  .seg button { flex: 1; background: var(--card2); border: 2px solid transparent; color: var(--muted);
+    border-radius: 8px; padding: 7px 0; font-size: 0.85em; cursor: pointer; }
+  .seg button.active { color: var(--text); border-color: var(--ok); }
+  .stat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 10px; }
+  .stat-tile { background: var(--card2); border-radius: 8px; padding: 8px 6px; text-align: center; }
+  .stat-tile .v { font-weight: 700; font-size: 1.05em; }
+  .stat-tile .v.over { color: #f0b429; }
+  .stat-tile .k { font-size: 0.7em; color: var(--muted); margin-top: 2px; }
+  .chart-detail { font-size: 0.8em; color: var(--muted); text-align: center; min-height: 1.3em; margin-top: 4px; }
   .legend { display: flex; gap: 12px; margin-top: 10px; flex-wrap: wrap; font-size: 0.75em; color: var(--muted); }
   .legend span { display: inline-flex; align-items: center; gap: 4px; }
   .legend .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
@@ -392,6 +404,7 @@
     </div>
     <div style="text-align:right;">
       <div class="week-label" id="exGoalLine"></div>
+      <div class="ex-over-line" id="exOverLine"></div>
     </div>
   </div>
   <div class="banner banner-green" id="exDoneBanner">🎉 오늘 목표 달성!!</div>
@@ -424,6 +437,29 @@
   <div class="legend">
     <span><i class="dot" style="background:var(--ok)"></i>목표 달성</span>
   </div>
+</div>
+
+<div class="card">
+  <h2>📊 통계</h2>
+  <div class="seg" id="exStatSeg">
+    <button type="button" data-mode="day" class="active">일별</button>
+    <button type="button" data-mode="week">주별</button>
+    <button type="button" data-mode="month">월별</button>
+  </div>
+  <div class="cal-head">
+    <button id="exStatPrev" type="button">◀</button>
+    <div class="cal-title" id="exStatTitle"></div>
+    <button id="exStatNext" type="button">▶</button>
+  </div>
+  <div id="exChart"></div>
+  <div class="chart-detail" id="exChartDetail">막대를 누르면 상세가 보여요</div>
+  <div class="legend">
+    <span><i class="dot" style="background:var(--ok)"></i>목표 달성</span>
+    <span><i class="dot" style="background:#d9822b"></i>미달</span>
+    <span><i class="dot" style="background:#f0b429"></i>초과분</span>
+    <span>― 목표선</span>
+  </div>
+  <div class="stat-grid" id="exStatGrid"></div>
 </div>
 
 <div class="card">
