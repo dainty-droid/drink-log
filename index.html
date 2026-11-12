@@ -98,6 +98,15 @@
   .stat-tile .v.over { color: #f0b429; }
   .stat-tile .k { font-size: 0.7em; color: var(--muted); margin-top: 2px; }
   .chart-detail { font-size: 0.8em; color: var(--muted); text-align: center; min-height: 1.3em; margin-top: 4px; }
+  .cal-info { display: none; background: var(--card2); border-radius: 8px; padding: 8px 10px;
+    font-size: 0.85em; margin-bottom: 8px; line-height: 1.5; }
+  .cal-info.show { display: block; }
+  .cal-info .ci-date { font-weight: 700; margin-right: 6px; }
+  .cal-info .ci-sub { color: var(--muted); font-size: 0.9em; }
+  .cal-dow.sun { color: #e5484d; }
+  .cal-dow.sat { color: #4a90d9; }
+  .cal-day .wt-val { font-size: 0.62em; color: var(--appointment); font-weight: 700; }
+  .cal-day.has-wt { box-shadow: inset 0 0 0 1px var(--appointment); }
   .legend { display: flex; gap: 12px; margin-top: 10px; flex-wrap: wrap; font-size: 0.75em; color: var(--muted); }
   .legend span { display: inline-flex; align-items: center; gap: 4px; }
   .legend .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
@@ -315,6 +324,7 @@
     <div class="cal-title" id="calTitle"></div>
     <button id="nextMonth">▶</button>
   </div>
+  <div class="cal-info" id="calInfo"></div>
   <div class="cal-grid" id="calDow"></div>
   <div class="cal-grid" id="calGrid"></div>
   <div class="legend">
@@ -432,6 +442,7 @@
     <div class="cal-title" id="exCalTitle"></div>
     <button id="exNextMonth" type="button">▶</button>
   </div>
+  <div class="cal-info" id="exCalInfo"></div>
   <div class="cal-grid" id="exCalDow"></div>
   <div class="cal-grid" id="exCalGrid"></div>
   <div class="legend">
@@ -517,6 +528,17 @@
     </div>
     <button type="submit" class="primary">기록 추가</button>
   </form>
+</div>
+
+<div class="card">
+  <div class="cal-head">
+    <button id="wtPrevMonth" type="button">◀</button>
+    <div class="cal-title" id="wtCalTitle"></div>
+    <button id="wtNextMonth" type="button">▶</button>
+  </div>
+  <div class="cal-info" id="wtCalInfo"></div>
+  <div class="cal-grid" id="wtCalDow"></div>
+  <div class="cal-grid" id="wtCalGrid"></div>
 </div>
 
 <div class="card">

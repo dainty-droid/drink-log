@@ -290,19 +290,52 @@
     });
   }
 
+  // ---------- 달력 공용 (일요일 시작) ----------
+  var DOW_KO = ["일", "월", "화", "수", "목", "금", "토"];
+  function fillDowRow(dowEl) {
+    if (dowEl.children.length) return;
+    DOW_KO.forEach(function (d, i) {
+      var el = document.createElement("div");
+      el.className = "cal-dow" + (i === 0 ? " sun" : i === 6 ? " sat" : "");
+      el.textContent = d;
+      dowEl.appendChild(el);
+    });
+  }
+  function dateLabel(dateStr) {
+    var dt = parseDate(dateStr);
+    return (dt.getMonth() + 1) + "/" + dt.getDate() + "(" + DOW_KO[dt.getDay()] + ")";
+  }
+  // 달력 위쪽 안내칸에 간단히 표시. lines: [[굵은글씨, 보조글씨], ...]
+  function showCalInfo(id, dateStr, lines) {
+    var box = document.getElementById(id);
+    box.innerHTML = "";
+    lines.forEach(function (ln, i) {
+      var row = document.createElement("div");
+      if (i === 0) {
+        var ds = document.createElement("span");
+        ds.className = "ci-date";
+        ds.textContent = dateLabel(dateStr);
+        row.appendChild(ds);
+      }
+      var main = document.createElement("span");
+      main.textContent = ln[0];
+      row.appendChild(main);
+      if (ln[1]) {
+        var sub = document.createElement("span");
+        sub.className = "ci-sub";
+        sub.textContent = " " + ln[1];
+        row.appendChild(sub);
+      }
+      box.appendChild(row);
+    });
+    box.classList.add("show");
+  }
+
   // ---------- 렌더: 달력 ----------
   var calCursor = new Date(); // 현재 보고 있는 달 (일자는 무시, 년/월만 사용)
 
   function renderCalendarHeader() {
-    var dowEl = document.getElementById("calDow");
-    if (dowEl.children.length === 0) {
-      ["월", "화", "수", "목", "금", "토", "일"].forEach(function (d) {
-        var el = document.createElement("div");
-        el.className = "cal-dow";
-        el.textContent = d;
-        dowEl.appendChild(el);
-      });
-    }
+    fillDowRow(document.getElementById("calDow"));
   }
 
   function renderCalendar() {
@@ -316,7 +349,7 @@
     });
 
     var first = new Date(y, m, 1);
-    var startOffset = (first.getDay() === 0) ? 6 : first.getDay() - 1; // 월요일 시작
+    var startOffset = first.getDay(); // 일요일 시작
     var daysInMonth = new Date(y, m + 1, 0).getDate();
     var todayS = todayStr();
 
@@ -371,10 +404,17 @@
   function selectDateForAdd(dateStr) {
     // 달력에서 날짜를 누르면 기록추가 폼의 날짜칸에 바로 적용된다(관리자님 요청,
     // 2026-11-06 - "달력에서 선택해도 바로 적용되게 해줘").
+    // 2026-11-12 변경: 아래 폼으로 스크롤하지 않고 달력 위에 그날 기록을 간단히 보여준다.
     document.getElementById("fDate").value = dateStr;
     renderCalendar();
-    document.getElementById("addForm").scrollIntoView({ behavior: "smooth", block: "start" });
-    showToast(dateStr + " 선택됨");
+    var entries = log.filter(function (r) { return r.date === dateStr; });
+    var lines = entries.length
+      ? entries.map(function (r) {
+          return [(SITUATIONS[r.situation] ? SITUATIONS[r.situation].label : r.situation),
+                  [r.drinkType, r.amount, r.memo].filter(Boolean).join(" · ")];
+        })
+      : [["기록 없음", "(아래 기록 추가 날짜로 지정됨)"]];
+    showCalInfo("calInfo", dateStr, lines);
   }
 
   document.getElementById("prevMonth").addEventListener("click", function () {
@@ -689,15 +729,7 @@
   var exCalCursor = new Date();
 
   function renderExCalendarHeader() {
-    var dowEl = document.getElementById("exCalDow");
-    if (dowEl.children.length === 0) {
-      ["월", "화", "수", "목", "금", "토", "일"].forEach(function (d) {
-        var el = document.createElement("div");
-        el.className = "cal-dow";
-        el.textContent = d;
-        dowEl.appendChild(el);
-      });
-    }
+    fillDowRow(document.getElementById("exCalDow"));
   }
 
   function renderExCalendar() {
@@ -705,7 +737,7 @@
     document.getElementById("exCalTitle").textContent = y + "년 " + (m + 1) + "월";
 
     var first = new Date(y, m, 1);
-    var startOffset = (first.getDay() === 0) ? 6 : first.getDay() - 1;
+    var startOffset = first.getDay(); // 일요일 시작
     var daysInMonth = new Date(y, m + 1, 0).getDate();
     var todayS = todayStr();
 
@@ -723,6 +755,10 @@
       var cell = document.createElement("div");
       cell.className = "cal-day";
       if (dateStr === todayS) cell.classList.add("today");
+
+      cell.dataset.date = dateStr;
+      if (dateStr === exPicked) cell.classList.add("picked");
+      cell.addEventListener("click", function () { pickExDate(this.dataset.date); });
 
       var total = exDayTotal(dateStr);
       var goal = dateStr <= todayS ? exNeed(dateStr).need : baseGoalOn(dateStr);
@@ -753,6 +789,24 @@
 
       grid.appendChild(cell);
     }
+  }
+
+  var exPicked = "";
+  function pickExDate(dateStr) {
+    exPicked = dateStr;
+    renderExCalendar();
+    var line;
+    if (dateStr > todayStr()) {
+      line = ["아직 안 온 날", "(목표 " + baseGoalOn(dateStr) + "개)"];
+    } else {
+      var nd = exNeed(dateStr), t = exDayTotal(dateStr);
+      var cnt = exLog.filter(function (r) { return r.date === dateStr; }).length;
+      var goalTxt = "목표 " + nd.need + (nd.carry > 0 ? " (이월 " + nd.carry + " 포함)" : "");
+      var res = t >= nd.need ? (t > nd.need ? "✅ 달성 · 초과 +" + (t - nd.need) : "✅ 달성")
+                             : "미달 " + (nd.need - t) + "개";
+      line = [t + "개 / " + goalTxt, res + (cnt ? " · " + cnt + "번 입력" : "")];
+    }
+    showCalInfo("exCalInfo", dateStr, [line]);
   }
 
   document.getElementById("exPrevMonth").addEventListener("click", function () {
@@ -896,10 +950,9 @@
   var exStatMode = "day";
   var exStatAnchor = new Date();
 
-  function startOfWeek(d) { // 월요일 시작
+  function startOfWeek(d) { // 일요일 시작 (달력과 동일)
     var x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-    var dow = x.getDay() === 0 ? 6 : x.getDay() - 1;
-    return addDays(x, -dow);
+    return addDays(x, -x.getDay());
   }
   // 기간 집계: 합계, 목표합(기본 목표 기준), 초과합, 달성일, 경과일, 최고 기록
   function exAgg(from, to) {
@@ -1327,8 +1380,79 @@
     reader.readAsText(file);
   });
 
+  // ---------- 체중 달력 ----------
+  var wtCalCursor = new Date();
+  var wtPicked = "";
+  function renderWtCalendar() {
+    fillDowRow(document.getElementById("wtCalDow"));
+    var y = wtCalCursor.getFullYear(), m = wtCalCursor.getMonth();
+    document.getElementById("wtCalTitle").textContent = y + "년 " + (m + 1) + "월";
+    var byDate = {};
+    wtLog.forEach(function (r) { byDate[r.date] = r; });
+    var startOffset = new Date(y, m, 1).getDay();
+    var daysInMonth = new Date(y, m + 1, 0).getDate();
+    var todayS = todayStr();
+    var grid = document.getElementById("wtCalGrid");
+    grid.innerHTML = "";
+    for (var i = 0; i < startOffset; i++) {
+      var pad = document.createElement("div");
+      pad.className = "cal-day empty";
+      grid.appendChild(pad);
+    }
+    for (var d = 1; d <= daysInMonth; d++) {
+      var dateStr = y + "-" + String(m + 1).padStart(2, "0") + "-" + String(d).padStart(2, "0");
+      var cell = document.createElement("div");
+      cell.className = "cal-day";
+      cell.dataset.date = dateStr;
+      if (dateStr === todayS) cell.classList.add("today");
+      if (dateStr === wtPicked) cell.classList.add("picked");
+      var num = document.createElement("div");
+      num.textContent = d;
+      cell.appendChild(num);
+      var r = byDate[dateStr];
+      if (r && r.weight != null) {
+        cell.classList.add("has-wt");
+        var v = document.createElement("div");
+        v.className = "wt-val";
+        v.textContent = r.weight.toFixed(1);
+        cell.appendChild(v);
+      }
+      cell.addEventListener("click", function () { pickWtDate(this.dataset.date); });
+      grid.appendChild(cell);
+    }
+  }
+  function pickWtDate(dateStr) {
+    wtPicked = dateStr;
+    document.getElementById("wtDate").value = dateStr;
+    renderWtCalendar();
+    var r = wtLog.find(function (x) { return x.date === dateStr; });
+    var line;
+    if (r) {
+      var parts = [];
+      if (r.weight != null) parts.push(r.weight.toFixed(1) + "kg");
+      if (r.fat != null) parts.push("체지방 " + r.fat.toFixed(1) + "%");
+      // 직전 기록 대비 체중 변화
+      var prev = wtSortedByField("weight").filter(function (x) { return x.date < dateStr; })[0];
+      var diff = (prev && r.weight != null) ? (r.weight - prev.weight) : null;
+      line = [parts.join(" · ") || "-",
+              diff != null ? "(직전 " + prev.date.slice(5).replace("-", "/") + " 대비 " + (diff > 0 ? "+" : "") + diff.toFixed(1) + "kg)" : ""];
+    } else {
+      line = ["기록 없음", "(위 입력 날짜로 지정됨)"];
+    }
+    showCalInfo("wtCalInfo", dateStr, [line]);
+  }
+  document.getElementById("wtPrevMonth").addEventListener("click", function () {
+    wtCalCursor = new Date(wtCalCursor.getFullYear(), wtCalCursor.getMonth() - 1, 1);
+    renderWtCalendar();
+  });
+  document.getElementById("wtNextMonth").addEventListener("click", function () {
+    wtCalCursor = new Date(wtCalCursor.getFullYear(), wtCalCursor.getMonth() + 1, 1);
+    renderWtCalendar();
+  });
+
   function renderWtAll() {
     renderWtLatest();
+    renderWtCalendar();
     renderTrendChart("wtWeightChart", "wtWeightMinMax", "weight", "var(--appointment)");
     renderTrendChart("wtFatChart", "wtFatMinMax", "fat", "var(--lunch)");
     renderWtLogList();
