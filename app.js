@@ -565,8 +565,312 @@
     renderLogList();
   }
 
+  // ========== 운동(푸쉬업 등) ==========
+  var EX_LOG_KEY = "exerciseLog_v1";
+  var EX_GOAL_KEY = "exerciseGoal_v1";
+  var EX_DEFAULT_GOAL = 200;
+
+  function loadExLog() {
+    try {
+      var raw = localStorage.getItem(EX_LOG_KEY);
+      if (!raw) return [];
+      var arr = JSON.parse(raw);
+      return Array.isArray(arr) ? arr : [];
+    } catch (e) {
+      console.warn("운동 기록 불러오기 실패", e);
+      return [];
+    }
+  }
+  function saveExLog(l) {
+    try {
+      localStorage.setItem(EX_LOG_KEY, JSON.stringify(l));
+    } catch (e) {
+      alert("저장에 실패했습니다: " + e);
+    }
+  }
+  function loadExGoal() {
+    try {
+      var raw = localStorage.getItem(EX_GOAL_KEY);
+      var n = raw ? parseInt(raw, 10) : NaN;
+      return (n && n > 0) ? n : EX_DEFAULT_GOAL;
+    } catch (e) {
+      return EX_DEFAULT_GOAL;
+    }
+  }
+  function saveExGoal(n) {
+    try { localStorage.setItem(EX_GOAL_KEY, String(n)); } catch (e) {}
+  }
+
+  var exLog = loadExLog();
+
+  function exDayTotal(dateStr) {
+    return exLog.filter(function (r) { return r.date === dateStr; })
+      .reduce(function (sum, r) { return sum + r.amount; }, 0);
+  }
+  function exAchieved(dateStr) {
+    return exDayTotal(dateStr) >= loadExGoal();
+  }
+
+  function renderExToday() {
+    var goal = loadExGoal();
+    var today = todayStr();
+    var total = exDayTotal(today);
+    var remain = Math.max(goal - total, 0);
+    var done = total >= goal;
+
+    var countEl = document.getElementById("exRemainCount");
+    countEl.textContent = done ? "0" : remain + "개";
+    countEl.className = "count " + (done ? "ok" : "caution");
+
+    document.getElementById("exGoalLine").textContent =
+      "목표 " + goal + "개 중 " + total + "개 완료";
+
+    document.getElementById("exDoneBanner").classList.toggle("show", done);
+    document.getElementById("exCurrentGoal").textContent = goal;
+  }
+
+  // 오늘 아직 달성 전이면 어제부터, 오늘 이미 달성했으면 오늘부터 거슬러 올라가며
+  // 연속 달성일을 센다.
+  function renderExStreak() {
+    var d = new Date();
+    if (!exAchieved(fmtDate(d))) d = addDays(d, -1);
+    var count = 0;
+    while (exAchieved(fmtDate(d))) {
+      count++;
+      d = addDays(d, -1);
+    }
+    document.getElementById("exStreak").textContent = count > 0 ? count + "일째" : "기록 없음";
+  }
+
+  var exCalCursor = new Date();
+
+  function renderExCalendarHeader() {
+    var dowEl = document.getElementById("exCalDow");
+    if (dowEl.children.length === 0) {
+      ["월", "화", "수", "목", "금", "토", "일"].forEach(function (d) {
+        var el = document.createElement("div");
+        el.className = "cal-dow";
+        el.textContent = d;
+        dowEl.appendChild(el);
+      });
+    }
+  }
+
+  function renderExCalendar() {
+    var y = exCalCursor.getFullYear(), m = exCalCursor.getMonth();
+    document.getElementById("exCalTitle").textContent = y + "년 " + (m + 1) + "월";
+
+    var goal = loadExGoal();
+    var first = new Date(y, m, 1);
+    var startOffset = (first.getDay() === 0) ? 6 : first.getDay() - 1;
+    var daysInMonth = new Date(y, m + 1, 0).getDate();
+    var todayS = todayStr();
+
+    var grid = document.getElementById("exCalGrid");
+    grid.innerHTML = "";
+
+    for (var i = 0; i < startOffset; i++) {
+      var pad = document.createElement("div");
+      pad.className = "cal-day empty";
+      grid.appendChild(pad);
+    }
+
+    for (var d = 1; d <= daysInMonth; d++) {
+      var dateStr = y + "-" + String(m + 1).padStart(2, "0") + "-" + String(d).padStart(2, "0");
+      var cell = document.createElement("div");
+      cell.className = "cal-day";
+      if (dateStr === todayS) cell.classList.add("today");
+
+      var total = exDayTotal(dateStr);
+      var done = total >= goal;
+      if (done) cell.classList.add("ex-done");
+
+      var num = document.createElement("div");
+      num.textContent = d;
+      cell.appendChild(num);
+
+      if (done) {
+        var lbl = document.createElement("div");
+        lbl.className = "ex-done-label";
+        lbl.textContent = "달성!!";
+        cell.appendChild(lbl);
+      } else if (total > 0) {
+        var prog = document.createElement("div");
+        prog.className = "ex-progress";
+        prog.textContent = total + "/" + goal;
+        cell.appendChild(prog);
+      }
+
+      grid.appendChild(cell);
+    }
+  }
+
+  document.getElementById("exPrevMonth").addEventListener("click", function () {
+    exCalCursor = new Date(exCalCursor.getFullYear(), exCalCursor.getMonth() - 1, 1);
+    renderExCalendar();
+  });
+  document.getElementById("exNextMonth").addEventListener("click", function () {
+    exCalCursor = new Date(exCalCursor.getFullYear(), exCalCursor.getMonth() + 1, 1);
+    renderExCalendar();
+  });
+
+  function renderExLogList() {
+    var container = document.getElementById("exLogList");
+    container.innerHTML = "";
+    if (!exLog.length) {
+      var empty = document.createElement("div");
+      empty.className = "empty-note";
+      empty.textContent = "아직 기록이 없습니다.";
+      container.appendChild(empty);
+      return;
+    }
+    var sorted = exLog.slice().sort(function (a, b) {
+      if (a.date !== b.date) return a.date < b.date ? 1 : -1;
+      return a.createdAt < b.createdAt ? 1 : -1;
+    });
+    sorted.slice(0, 30).forEach(function (r) {
+      var item = document.createElement("div");
+      item.className = "log-item";
+
+      var tag = document.createElement("div");
+      tag.className = "tag";
+      tag.style.background = "var(--ok)";
+      item.appendChild(tag);
+
+      var info = document.createElement("div");
+      info.className = "info";
+      var dateEl = document.createElement("div");
+      dateEl.className = "date";
+      dateEl.textContent = r.date + " · " + r.amount + "개";
+      info.appendChild(dateEl);
+      item.appendChild(info);
+
+      var del = document.createElement("button");
+      del.className = "del";
+      del.textContent = "✕";
+      del.addEventListener("click", function () {
+        if (!confirm("이 기록을 삭제할까요?\n" + r.date + " · " + r.amount + "개")) return;
+        exLog = exLog.filter(function (x) { return x.id !== r.id; });
+        saveExLog(exLog);
+        renderExAll();
+        showToast("삭제했습니다");
+      });
+      item.appendChild(del);
+
+      container.appendChild(item);
+    });
+  }
+
+  document.getElementById("exAddForm").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var amountInput = document.getElementById("exAmount");
+    var amount = parseInt(amountInput.value, 10);
+    if (!amount || amount <= 0) return;
+
+    var wasAchieved = exAchieved(todayStr());
+
+    exLog.push({
+      id: uid(),
+      date: todayStr(),
+      amount: amount,
+      createdAt: new Date().toISOString()
+    });
+    saveExLog(exLog);
+
+    amountInput.value = "";
+    renderExAll();
+
+    showToast((!wasAchieved && exAchieved(todayStr())) ? "🎉 오늘 목표 달성!!" : (amount + "개 추가했습니다"));
+  });
+
+  document.getElementById("exGoalSaveBtn").addEventListener("click", function () {
+    var input = document.getElementById("exGoalInput");
+    var n = parseInt(input.value, 10);
+    if (!n || n <= 0) {
+      alert("1 이상의 숫자를 입력해주세요.");
+      return;
+    }
+    saveExGoal(n);
+    input.value = "";
+    renderExAll();
+    showToast("목표를 " + n + "개로 설정했습니다");
+  });
+
+  document.getElementById("exExportBtn").addEventListener("click", function () {
+    var data = { goal: loadExGoal(), log: exLog };
+    var blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = "exerciselog_" + todayStr() + ".json";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast("내보냈습니다");
+  });
+
+  document.getElementById("exImportBtn").addEventListener("click", function () {
+    document.getElementById("exImportFile").click();
+  });
+
+  document.getElementById("exImportFile").addEventListener("change", function (e) {
+    var file = e.target.files[0];
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function () {
+      try {
+        var imported = JSON.parse(reader.result);
+        var importedLog = Array.isArray(imported) ? imported : (imported.log || []);
+        var byId = {};
+        exLog.forEach(function (r) { byId[r.id] = r; });
+        importedLog.forEach(function (r) {
+          if (!r.id) r.id = uid();
+          byId[r.id] = r;
+        });
+        exLog = Object.values(byId);
+        saveExLog(exLog);
+        if (imported && imported.goal) saveExGoal(imported.goal);
+        renderExAll();
+        showToast(importedLog.length + "건 가져왔습니다");
+      } catch (err) {
+        alert("가져오기 실패: " + err.message);
+      }
+      e.target.value = "";
+    };
+    reader.readAsText(file);
+  });
+
+  function renderExAll() {
+    renderExToday();
+    renderExStreak();
+    renderExCalendar();
+    renderExLogList();
+  }
+
+  // ---------- 탭 전환 ----------
+  var tabButtons = document.querySelectorAll(".tab-btn");
+  var tabPanels = document.querySelectorAll(".tab-panel");
+  function switchTab(tab) {
+    tabButtons.forEach(function (b) { b.classList.toggle("active", b.dataset.tab === tab); });
+    tabPanels.forEach(function (p) { p.classList.toggle("active", p.id === "tab-" + tab); });
+    try { localStorage.setItem("activeTab_v1", tab); } catch (e) {}
+  }
+  tabButtons.forEach(function (b) {
+    b.addEventListener("click", function () { switchTab(b.dataset.tab); });
+  });
+
   renderCalendarHeader();
   renderAll();
+  renderExCalendarHeader();
+  renderExAll();
+
+  var savedTab = "drink";
+  try {
+    var st = localStorage.getItem("activeTab_v1");
+    if (st === "exercise" || st === "drink") savedTab = st;
+  } catch (e) {}
+  switchTab(savedTab);
 
   // ---------- 서비스워커 등록 (오프라인/설치용) ----------
   if ("serviceWorker" in navigator) {

@@ -194,14 +194,36 @@
     box-shadow: 0 4px 16px rgba(0,0,0,0.4);
   }
   .toast.show { opacity: 1; }
+
+  /* 탭 */
+  .tabbar { display: flex; gap: 8px; margin-top: 10px; }
+  .tab-btn {
+    flex: 1; background: var(--card2); border: none; color: var(--muted);
+    border-radius: 10px; padding: 10px; font-size: 0.9em; font-weight: 700;
+  }
+  .tab-btn.active { color: var(--text); background: #1c2c3a; box-shadow: inset 0 0 0 2px var(--appointment); }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  /* 운동 */
+  .banner-green { background: #13301c; color: #9af0b8; border: 1px solid var(--ok); }
+  .cal-day.ex-done { box-shadow: inset 0 0 0 2px var(--ok); background: rgba(63,185,80,0.18); }
+  .ex-progress { font-size: 0.6em; color: var(--muted); margin-top: 2px; }
+  .ex-done-label { font-size: 0.6em; color: var(--ok); font-weight: 800; margin-top: 2px; }
 </style>
 </head>
 <body>
 
 <header>
-  <h1>🍶 음주기록</h1>
-  <p class="subtitle">2026-11-08부터 절주 중 — 혼술 금지, 주 1회(최대 2회)</p>
+  <h1>📒 자기관리</h1>
+  <div class="tabbar" id="tabBar">
+    <button class="tab-btn active" data-tab="drink" type="button">🍶 금주</button>
+    <button class="tab-btn" data-tab="exercise" type="button">💪 운동</button>
+  </div>
 </header>
+
+<section id="tab-drink" class="tab-panel active">
+<p class="subtitle" style="margin:0 16px 10px;">2026-11-08부터 절주 중 — 혼술 금지, 주 1회(최대 2회)</p>
 
 <div class="card week-box-wrap">
   <div class="week-box">
@@ -312,6 +334,77 @@
   </div>
   <input type="file" id="importFile" accept="application/json">
 </div>
+
+</section>
+
+<section id="tab-exercise" class="tab-panel">
+
+<div class="card">
+  <div class="week-box">
+    <div>
+      <div class="week-label">오늘 목표</div>
+      <div class="count" id="exRemainCount">-</div>
+    </div>
+    <div style="text-align:right;">
+      <div class="week-label" id="exGoalLine"></div>
+    </div>
+  </div>
+  <div class="banner banner-green" id="exDoneBanner">🎉 오늘 목표 달성!!</div>
+  <form id="exAddForm">
+    <div class="field" style="margin-top:10px;">
+      <label>오늘 한 갯수</label>
+      <input type="number" id="exAmount" min="1" placeholder="예: 30" required>
+    </div>
+    <button type="submit" class="primary">입력</button>
+  </form>
+</div>
+
+<div class="card">
+  <div class="streaks">
+    <div class="streak">
+      <div class="num any" id="exStreak">-</div>
+      <div class="lbl">목표 달성 연속</div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="cal-head">
+    <button id="exPrevMonth" type="button">◀</button>
+    <div class="cal-title" id="exCalTitle"></div>
+    <button id="exNextMonth" type="button">▶</button>
+  </div>
+  <div class="cal-grid" id="exCalDow"></div>
+  <div class="cal-grid" id="exCalGrid"></div>
+  <div class="legend">
+    <span><i class="dot" style="background:var(--ok)"></i>목표 달성</span>
+  </div>
+</div>
+
+<div class="card">
+  <h2>목표 설정</h2>
+  <div class="field">
+    <label>하루 목표 (현재 <span id="exCurrentGoal"></span>개)</label>
+    <input type="number" id="exGoalInput" min="1" placeholder="예: 200">
+  </div>
+  <button class="secondary" type="button" id="exGoalSaveBtn">목표 변경</button>
+</div>
+
+<div class="card">
+  <h2>최근 기록</h2>
+  <div id="exLogList"></div>
+</div>
+
+<div class="card">
+  <h2>백업</h2>
+  <div class="io-row">
+    <button class="secondary" type="button" id="exExportBtn">📤 내보내기 (JSON)</button>
+    <button class="secondary" type="button" id="exImportBtn">📥 가져오기 (JSON)</button>
+  </div>
+  <input type="file" id="exImportFile" accept="application/json">
+</div>
+
+</section>
 
 <div class="toast" id="toast"></div>
 
