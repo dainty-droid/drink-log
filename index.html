@@ -19,6 +19,7 @@
     --lunch: #f4b942;
     --appointment: #4a90d9;
     --solo: #e5484d;
+    --seasonal: #3fb37f;
     --ok: #3fb950;
     --warn: #e5484d;
   }
@@ -155,7 +156,7 @@
     color: var(--text); border-radius: 8px; padding: 10px; font-size: 0.95em;
     font-family: inherit;
   }
-  .situation-pick { display: flex; gap: 8px; }
+  .situation-pick { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
   .situation-pick label {
     flex: 1; text-align: center; padding: 10px 4px; border-radius: 10px;
     background: var(--card2); border: 2px solid transparent; cursor: pointer;
@@ -167,6 +168,7 @@
   .situation-pick label[data-sit="lunch"].active { border-color: var(--lunch); background: #3a311c; }
   .situation-pick label[data-sit="appointment"].active { border-color: var(--appointment); background: #1c2c3a; }
   .situation-pick label[data-sit="solo"].active { border-color: var(--solo); background: #3a1c1e; }
+  .situation-pick label[data-sit="seasonal"].active { border-color: var(--seasonal); background: #1c3a2c; }
 
   /* 주종 선택 */
   .type-pick { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -331,6 +333,7 @@
     <span><i class="dot" style="background:var(--lunch)"></i>점심 막걸리</span>
     <span><i class="dot" style="background:var(--appointment)"></i>술 약속</span>
     <span><i class="dot" style="background:var(--solo)"></i>혼술</span>
+    <span><i class="dot" style="background:var(--seasonal)"></i>제철 예외</span>
   </div>
 </div>
 
@@ -364,6 +367,7 @@
         <label data-sit="lunch" class="active"><input type="radio" name="situation" value="lunch" checked><span>🍶 점심 막걸리</span></label>
         <label data-sit="appointment"><input type="radio" name="situation" value="appointment"><span>🍻 술 약속</span></label>
         <label data-sit="solo"><input type="radio" name="situation" value="solo"><span>⚠️ 혼술</span></label>
+        <label data-sit="seasonal"><input type="radio" name="situation" value="seasonal"><span>🦪 제철 예외</span></label>
       </div>
     </div>
     <div class="field">

@@ -6,9 +6,12 @@
   var SITUATIONS = {
     lunch: { label: "점심 막걸리", color: "#f4b942" },
     appointment: { label: "술 약속", color: "#4a90d9" },
-    solo: { label: "혼술", color: "#e5484d" }
+    solo: { label: "혼술", color: "#e5484d" },
+    // 2026-11-16 관리자님 요청: 혼술이지만 제철 음식(굴 등)에 한 잔은 예외로 친다.
+    // 혼술 경고(빨간 배너/혼술 안 한 지 D+)에는 안 걸리고, 이번 주 음주 횟수에는 그대로 센다.
+    seasonal: { label: "제철 예외", color: "#3fb37f" }
   };
-  var SIT_PRIORITY = ["solo", "appointment", "lunch"]; // 달력 셀 대표색 우선순위
+  var SIT_PRIORITY = ["solo", "seasonal", "appointment", "lunch"]; // 달력 셀 대표색 우선순위
 
   // ---------- 저장소 ----------
   function loadLog() {
