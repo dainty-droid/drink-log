@@ -12,6 +12,12 @@
     seasonal: { label: "제철 예외", color: "#3fb37f" }
   };
   var SIT_PRIORITY = ["solo", "seasonal", "appointment", "lunch"]; // 달력 셀 대표색 우선순위
+  // 2026-11-16 관리자님 요청: 혼술은 주 1회까지 허용(목표), 넘으면 빨간불.
+  // ("일주일에 딱 한 잔 정도는 필요한 것 같다 - 주 1회 혼술을 넘으면 빨간불")
+  var SOLO_WEEKLY_ALLOW = 1;
+  function soloCountOf(entries) {
+    return entries.filter(function (r) { return r.situation === "solo"; }).length;
+  }
 
   // ---------- 저장소 ----------
   function loadLog() {
@@ -114,7 +120,8 @@
 
     var weekEntries = log.filter(function (r) { return r.date >= wsStr && r.date <= weStr; });
     var count = weekEntries.length;
-    var hasSolo = weekEntries.some(function (r) { return r.situation === "solo"; });
+    var soloCount = soloCountOf(weekEntries);
+    var soloOver = soloCount > SOLO_WEEKLY_ALLOW;
 
     var countEl = document.getElementById("weekCount");
     countEl.textContent = count + "회";
@@ -126,8 +133,13 @@
     // 혼술이 있으면 빨간 배너(약속 위반, 더 급한 경고)만 띄우고, 2회 경고는 혼술이
     // 없을 때만 노란 배너로 따로 띄운다(관리자님 요청, 2026-11-05 - "혼술이 있으면
     // 빨간 배너로 경고, 2회 이상이면 노란색으로").
-    document.getElementById("soloBanner").classList.toggle("show", hasSolo);
-    document.getElementById("countBanner").classList.toggle("show", count >= 2 && !hasSolo);
+    // 혼술은 주 SOLO_WEEKLY_ALLOW회까지는 허용 - 넘으면 빨간 배너, 딱 다 쓴 상태면 노란 안내.
+    var soloLine = document.getElementById("soloAllowLine");
+    soloLine.textContent = "혼술 " + soloCount + " / " + SOLO_WEEKLY_ALLOW + "회" +
+      (soloOver ? " — 초과!" : (soloCount === SOLO_WEEKLY_ALLOW ? " — 이번 주 몫 다 씀" : " — 아직 여유"));
+    soloLine.className = "solo-allow " + (soloOver ? "over" : (soloCount === SOLO_WEEKLY_ALLOW ? "caution" : "ok"));
+    document.getElementById("soloBanner").classList.toggle("show", soloOver);
+    document.getElementById("countBanner").classList.toggle("show", count >= 2 && !soloOver);
   }
 
   // ---------- 렌더: 연속 기록 ----------
@@ -260,11 +272,12 @@
     weeks.forEach(function (w, idx) {
       var count = w.entries.length;
       var hasSolo = w.entries.some(function (r) { return r.situation === "solo"; });
+      var soloOverW = soloCountOf(w.entries) > SOLO_WEEKLY_ALLOW;
       var amounts = [];
       w.entries.forEach(function (r) { if (r.amount && r.amount.trim()) amounts.push(r.amount); });
       var mergedAmount = mergeAmounts(amounts);
 
-      var tone = hasSolo ? "over" : (count >= 2 ? "caution" : "ok");
+      var tone = soloOverW ? "over" : (count >= 2 ? "caution" : "ok");
 
       var row = document.createElement("div");
       row.className = "trend-row";
