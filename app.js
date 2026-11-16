@@ -18,6 +18,18 @@
   function soloCountOf(entries) {
     return entries.filter(function (r) { return r.situation === "solo"; }).length;
   }
+  // 같은 날 관리자님 추가 요청: 제철 예외는 한 달에 1회까지, 넘으면 그것도 빨간불.
+  var SEASONAL_MONTHLY_ALLOW = 1;
+  function seasonalCountInMonth(monthPrefix) { // "YYYY-MM"
+    return log.filter(function (r) { return r.situation === "seasonal" && r.date.slice(0, 7) === monthPrefix; }).length;
+  }
+  // 이 기록이 그 달의 몇 번째 제철 예외인지(날짜순, 같은 날이면 입력순) - 허용 횟수를 넘긴 기록인지 판정용
+  function isSeasonalOver(rec) {
+    if (rec.situation !== "seasonal") return false;
+    var same = log.filter(function (r) { return r.situation === "seasonal" && r.date.slice(0, 7) === rec.date.slice(0, 7); });
+    same.sort(function (a, b) { return a.date === b.date ? ((a.createdAt || "") < (b.createdAt || "") ? -1 : 1) : (a.date < b.date ? -1 : 1); });
+    return same.indexOf(rec) >= SEASONAL_MONTHLY_ALLOW;
+  }
 
   // ---------- 저장소 ----------
   function loadLog() {
@@ -139,7 +151,17 @@
       (soloOver ? " — 초과!" : (soloCount === SOLO_WEEKLY_ALLOW ? " — 이번 주 몫 다 씀" : " — 아직 여유"));
     soloLine.className = "solo-allow " + (soloOver ? "over" : (soloCount === SOLO_WEEKLY_ALLOW ? "caution" : "ok"));
     document.getElementById("soloBanner").classList.toggle("show", soloOver);
-    document.getElementById("countBanner").classList.toggle("show", count >= 2 && !soloOver);
+
+    var monthPrefix = fmtDate(today).slice(0, 7);
+    var seaCount = seasonalCountInMonth(monthPrefix);
+    var seaOver = seaCount > SEASONAL_MONTHLY_ALLOW;
+    var seaLine = document.getElementById("seasonalAllowLine");
+    seaLine.textContent = "🦪 제철 예외 이번 달 " + seaCount + " / " + SEASONAL_MONTHLY_ALLOW + "회" +
+      (seaOver ? " — 초과!" : (seaCount === SEASONAL_MONTHLY_ALLOW ? " — 이번 달 몫 다 씀" : " — 아직 여유"));
+    seaLine.className = "solo-allow " + (seaOver ? "over" : (seaCount === SEASONAL_MONTHLY_ALLOW ? "caution" : "ok"));
+    document.getElementById("seasonalBanner").classList.toggle("show", seaOver);
+
+    document.getElementById("countBanner").classList.toggle("show", count >= 2 && !soloOver && !seaOver);
   }
 
   // ---------- 렌더: 연속 기록 ----------
@@ -272,7 +294,7 @@
     weeks.forEach(function (w, idx) {
       var count = w.entries.length;
       var hasSolo = w.entries.some(function (r) { return r.situation === "solo"; });
-      var soloOverW = soloCountOf(w.entries) > SOLO_WEEKLY_ALLOW;
+      var soloOverW = soloCountOf(w.entries) > SOLO_WEEKLY_ALLOW || w.entries.some(isSeasonalOver);
       var amounts = [];
       w.entries.forEach(function (r) { if (r.amount && r.amount.trim()) amounts.push(r.amount); });
       var mergedAmount = mergeAmounts(amounts);
