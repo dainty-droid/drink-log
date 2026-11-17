@@ -710,13 +710,31 @@
     if (exNeedCache[dateStr]) return exNeedCache[dateStr];
     return (exNeedCache[dateStr] = exNeedCalc(dateStr));
   }
+  // 2026-11-17 휴식일(주 1회): 그날 목표는 0. 전날까지 밀린 이월분은 없어지지 않고
+  // 다음 날로 그대로 넘어간다(휴식일에 몇 개 했으면 그만큼 이월에서 빠짐).
+  var EX_REST_KEY = "exerciseRest_v1";
+  function loadRest() {
+    try { var a = JSON.parse(localStorage.getItem(EX_REST_KEY) || "[]"); return Array.isArray(a) ? a : []; }
+    catch (e) { return []; }
+  }
+  function saveRest(a) { try { localStorage.setItem(EX_REST_KEY, JSON.stringify(a)); } catch (e) {} }
+  var exRest = loadRest();
+  function isRest(ds) { return exRest.indexOf(ds) !== -1; }
+  function restInWeekOf(ds) { // 같은 주(일~토)에 이미 잡힌 휴식일
+    var ws = fmtDate(startOfWeek(parseDate(ds))), we = fmtDate(addDays(startOfWeek(parseDate(ds)), 6));
+    return exRest.filter(function (x) { return x >= ws && x <= we && x !== ds; });
+  }
+
   function exNeedCalc(dateStr) {
-    var base = baseGoalOn(dateStr);
-    if (dateStr <= EX_CARRY_START) return { base: base, carry: 0, need: base };
+    var rest = isRest(dateStr);
+    var base = rest ? 0 : baseGoalOn(dateStr);
+    if (dateStr <= EX_CARRY_START) return { base: base, carry: 0, need: base, rest: rest };
     // 전날 값으로 한 칸만 계산 (캐시 덕분에 날짜마다 한 번씩만 계산됨)
     var prev = fmtDate(addDays(parseDate(dateStr), -1));
-    var carry = Math.max(exNeed(prev).need - exDayTotal(prev), 0);
-    return { base: base, carry: carry, need: base + carry };
+    var pn = exNeed(prev);
+    var carry = Math.max((pn.rest ? pn.carry : pn.need) - exDayTotal(prev), 0);
+    if (rest) return { base: 0, carry: carry, need: 0, rest: true };
+    return { base: base, carry: carry, need: base + carry, rest: false };
   }
 
   var exLog = loadExLog();
@@ -740,6 +758,19 @@
     var countEl = document.getElementById("exRemainCount");
     countEl.textContent = done ? "0" : remain + "개";
     countEl.className = "count " + (done ? "ok" : "caution");
+    renderExRestBtn();
+
+    if (nd.rest) {
+      countEl.textContent = "😴 휴식";
+      countEl.className = "count ok";
+      document.getElementById("exGoalLine").textContent = "오늘은 휴식일" +
+        (nd.carry > 0 ? " · 밀린 " + Math.max(nd.carry - total, 0) + "개는 내일로" : "") +
+        (total > 0 ? " · 그래도 " + total + "개 함" : "");
+      document.getElementById("exDoneBanner").classList.remove("show");
+      document.getElementById("exOverLine").textContent = "";
+      document.getElementById("exCurrentGoal").textContent = baseGoalOn(today);
+      return;
+    }
 
     document.getElementById("exGoalLine").textContent =
       (nd.carry > 0
@@ -801,13 +832,20 @@
       var total = exDayTotal(dateStr);
       var goal = dateStr <= todayS ? exNeed(dateStr).need : baseGoalOn(dateStr);
       var done = total >= goal;
-      if (done) cell.classList.add("ex-done");
+      var restDay = isRest(dateStr);
+      if (restDay) cell.classList.add("ex-rest");
+      else if (done) cell.classList.add("ex-done");
 
       var num = document.createElement("div");
       num.textContent = d;
       cell.appendChild(num);
 
-      if (done) {
+      if (restDay) {
+        var rl = document.createElement("div");
+        rl.className = "ex-rest-label";
+        rl.textContent = total > 0 ? "휴식 " + total : "휴식";
+        cell.appendChild(rl);
+      } else if (done) {
         var lbl = document.createElement("div");
         lbl.className = "ex-done-label";
         lbl.textContent = "달성!!";
@@ -834,7 +872,13 @@
     exPicked = dateStr;
     renderExCalendar();
     var line;
-    if (dateStr > todayStr()) {
+    renderExRestBtn();
+    if (isRest(dateStr)) {
+      var rn = dateStr <= todayStr() ? exNeed(dateStr) : { carry: 0 };
+      var rt = exDayTotal(dateStr);
+      line = ["😴 휴식일" + (rt > 0 ? " · " + rt + "개 함" : ""),
+              rn.carry > 0 ? "(밀린 " + rn.carry + "개는 다음 날로)" : "(목표 없음)"];
+    } else if (dateStr > todayStr()) {
       line = ["아직 안 온 날", "(목표 " + baseGoalOn(dateStr) + "개)"];
     } else {
       var nd = exNeed(dateStr), t = exDayTotal(dateStr);
@@ -846,6 +890,34 @@
     }
     showCalInfo("exCalInfo", dateStr, [line]);
   }
+
+  // 휴식일 버튼: 달력에서 고른 날(없으면 오늘)을 휴식일로 지정/취소. 주(일~토) 1회까지.
+  function exRestTarget() { return exPicked || todayStr(); }
+  function renderExRestBtn() {
+    var btn = document.getElementById("exRestBtn");
+    if (!btn) return;
+    var ds = exRestTarget();
+    btn.textContent = isRest(ds) ? "😴 " + dateLabel(ds) + " 휴식일 취소" : "😴 " + dateLabel(ds) + " 휴식일로 지정";
+    btn.classList.toggle("on", isRest(ds));
+  }
+  document.getElementById("exRestBtn").addEventListener("click", function () {
+    var ds = exRestTarget();
+    if (isRest(ds)) {
+      exRest = exRest.filter(function (x) { return x !== ds; });
+    } else {
+      var same = restInWeekOf(ds);
+      if (same.length) {
+        alert("이번 주 휴식일은 이미 " + dateLabel(same[0]) + "이에요. 휴식은 주 1회!\n(바꾸려면 그날 휴식을 먼저 취소하세요)");
+        return;
+      }
+      exRest.push(ds);
+      exRest.sort();
+    }
+    saveRest(exRest);
+    renderExAll();
+    if (exPicked) pickExDate(exPicked);
+    showToast(isRest(ds) ? dateLabel(ds) + " 휴식일로 지정했어요" : "휴식일을 취소했어요");
+  });
 
   document.getElementById("exPrevMonth").addEventListener("click", function () {
     exCalCursor = new Date(exCalCursor.getFullYear(), exCalCursor.getMonth() - 1, 1);
@@ -939,7 +1011,7 @@
   });
 
   document.getElementById("exExportBtn").addEventListener("click", function () {
-    var data = { goal: loadExGoal(), goalHist: loadGoalHist(), log: exLog };
+    var data = { goal: loadExGoal(), goalHist: loadGoalHist(), rest: exRest, log: exLog };
     var blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
     var url = URL.createObjectURL(blob);
     var a = document.createElement("a");
@@ -974,6 +1046,7 @@
         saveExLog(exLog);
         if (imported && imported.goalHist) { try { localStorage.setItem(EX_GOAL_HIST_KEY, JSON.stringify(imported.goalHist)); } catch (e2) {} }
         if (imported && imported.goal) saveExGoal(imported.goal);
+        if (imported && Array.isArray(imported.rest)) { exRest = imported.rest.slice().sort(); saveRest(exRest); }
         renderExAll();
         showToast(importedLog.length + "건 가져왔습니다");
       } catch (err) {
@@ -1656,7 +1729,7 @@
       version: 1,
       exportedAt: new Date().toISOString(),
       drink: log,
-      exercise: { goal: loadExGoal(), goalHist: loadGoalHist(), log: exLog },
+      exercise: { goal: loadExGoal(), goalHist: loadGoalHist(), rest: exRest, log: exLog },
       weight: wtLog
     };
     var blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
@@ -1697,6 +1770,7 @@
           saveExLog(exLog);
           if (d.exercise.goalHist) { try { localStorage.setItem(EX_GOAL_HIST_KEY, JSON.stringify(d.exercise.goalHist)); } catch (e2) {} }
           if (d.exercise.goal) saveExGoal(d.exercise.goal);
+          if (Array.isArray(d.exercise.rest)) { exRest = d.exercise.rest.slice().sort(); saveRest(exRest); }
         }
         wtLog = mergeById(wtLog, d.weight || []);
         saveWtLog(wtLog);
