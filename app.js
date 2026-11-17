@@ -1167,11 +1167,12 @@
 
   // 같은 날짜에 체중만 혹은 체지방률만 따로 입력해도, 입력한 값만 그 날짜
   // 기록에 덮어써서 합쳐준다(둘 다 한 번에 입력 안 해도 되게).
-  function wtUpsert(date, weight, fat) {
+  function wtUpsert(date, weight, fat, extra) {
     var existing = wtLog.find(function (r) { return r.date === date; });
     if (existing) {
       if (weight !== null) existing.weight = weight;
       if (fat !== null) existing.fat = fat;
+      if (extra) existing.extra = extra;
       existing.createdAt = new Date().toISOString();
     } else {
       wtLog.push({
@@ -1179,6 +1180,7 @@
         date: date,
         weight: weight,
         fat: fat,
+        extra: extra || undefined,
         createdAt: new Date().toISOString()
       });
     }
@@ -1367,13 +1369,127 @@
       return;
     }
 
-    wtUpsert(date, weight, fat);
+    wtUpsert(date, weight, fat, ocrExtra);
+    ocrExtra = null;
+    document.getElementById("wtOcrBox").className = "ocr-box";
 
     weightInput.value = "";
     fatInput.value = "";
     renderWtAll();
     showToast("기록을 추가했습니다");
   });
+
+  // ---------- PICOOC 측정 보고서 사진에서 숫자 읽기 (2026-11-17) ----------
+  // 공유로 받거나(📤 PICOOC 공유 → 자기관리) 사진 선택 버튼으로 고른 이미지를 글자 인식(tesseract.js)으로
+  // 읽어서 날짜/체중/체지방률을 칸에 채운다. 잘못 읽을 수 있으니 저장은 사람이 확인하고 누른다.
+  var ocrExtra = null;
+  var TESS_URL = "https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js";
+  function loadTesseract() {
+    if (window.Tesseract) return Promise.resolve(window.Tesseract);
+    return new Promise(function (resolve, reject) {
+      var s = document.createElement("script");
+      s.src = TESS_URL;
+      s.onload = function () { resolve(window.Tesseract); };
+      s.onerror = function () { reject(new Error("글자 인식 엔진을 못 받았어요 (인터넷 연결 확인)")); };
+      document.head.appendChild(s);
+    });
+  }
+  function ocrNum(s) { return s == null ? null : parseFloat(String(s).replace(",", ".")); }
+  function parsePicooc(raw) {
+    var t = raw.replace(/[ \t]+/g, " ");
+    var flat = t.replace(/\s+/g, " ");
+    function grab(re) { var m = flat.match(re); return m ? ocrNum(m[1]) : null; }
+    var out = {};
+    out.weight = grab(/체\s?중\s*:?\s*(\d{2,3}[.,]\d)/) ;
+    if (out.weight == null) out.weight = grab(/(\d{2,3}[.,]\d)\s*k\s*g/i);
+    out.fat = grab(/체\s?지\s?방\s?률\s*:?\s*(\d{1,2}[.,]\d)/);
+    if (out.fat == null) out.fat = grab(/(\d{1,2}[.,]\d)\s*%/);
+    var ex = {};
+    ex.visceral = grab(/내\s?장\s?지\s?방[^\d]{0,12}(\d{1,2})(?![.,\d])/);
+    ex.skeletal = grab(/골\s?격\s?근[^\d]{0,8}(\d{1,2}[.,]\d)/);
+    ex.muscle = grab(/근\s?육\s?량\s?률?[^\d]{0,8}(\d{1,2}[.,]\d)/);
+    ex.water = grab(/수\s?분[^\d]{0,8}(\d{1,2}[.,]\d)/);
+    ex.bmi = grab(/B\s?M\s?I[^\d]{0,8}(\d{2}[.,]\d)/i);
+    ex.bmr = grab(/B\s?M\s?R[^\d]{0,8}(\d{3,4})/i);
+    ex.bodyAge = grab(/신\s?체\s?나\s?이[^\d]{0,8}(\d{2})/);
+    Object.keys(ex).forEach(function (k) { if (ex[k] == null || isNaN(ex[k])) delete ex[k]; });
+    out.extra = Object.keys(ex).length ? ex : null;
+    // 날짜: 위쪽 "11월/17/2026" 형식 우선, 없으면 아래쪽 "17/11/2026"(일/월/년)
+    var dm = flat.match(/(\d{1,2})\s?월\s?\/\s?(\d{1,2})\s?\/\s?(20\d\d)/);
+    if (dm) out.date = dm[3] + "-" + ("0" + dm[1]).slice(-2) + "-" + ("0" + dm[2]).slice(-2);
+    else {
+      dm = flat.match(/(\d{1,2})\s?\/\s?(\d{1,2})\s?\/\s?(20\d\d)/);
+      if (dm && +dm[2] <= 12) out.date = dm[3] + "-" + ("0" + dm[2]).slice(-2) + "-" + ("0" + dm[1]).slice(-2);
+    }
+    if (out.weight != null && (out.weight < 30 || out.weight > 200)) out.weight = null;
+    if (out.fat != null && (out.fat < 3 || out.fat > 60)) out.fat = null;
+    return out;
+  }
+  function ocrStatus(msg, cls) {
+    var box = document.getElementById("wtOcrBox");
+    box.className = "ocr-box show " + (cls || "");
+    box.innerHTML = msg;
+  }
+  function readPicoocImage(blob) {
+    switchTab("weight");
+    ocrStatus("📷 사진 읽는 중... (처음 한 번은 엔진 받느라 10~20초 걸려요)");
+    document.getElementById("wtOcrBox").scrollIntoView({ block: "center" });
+    loadTesseract().then(function (T) {
+      return T.recognize(blob, "kor+eng");
+    }).then(function (res) {
+      var p = parsePicooc(res.data.text || "");
+      if (p.weight == null && p.fat == null) {
+        ocrStatus("😥 숫자를 못 읽었어요. PICOOC 측정 보고서 사진이 맞는지 확인하거나 직접 입력해주세요.", "bad");
+        return;
+      }
+      if (p.date) document.getElementById("wtDate").value = p.date;
+      if (p.weight != null) document.getElementById("wtWeight").value = p.weight.toFixed(1);
+      if (p.fat != null) document.getElementById("wtFat").value = p.fat.toFixed(1);
+      ocrExtra = p.extra;
+      var bits = [];
+      bits.push("<b>" + (p.date ? dateLabel(p.date) : "날짜 못 읽음(오늘로)") + "</b>");
+      bits.push("체중 " + (p.weight != null ? p.weight.toFixed(1) + "kg" : "?"));
+      bits.push("체지방 " + (p.fat != null ? p.fat.toFixed(1) + "%" : "?"));
+      var e = p.extra || {};
+      var more = [];
+      if (e.visceral != null) more.push("내장지방 " + e.visceral);
+      if (e.skeletal != null) more.push("골격근 " + e.skeletal + "%");
+      if (e.bmi != null) more.push("BMI " + e.bmi);
+      ocrStatus("✅ 읽은 값: " + bits.join(" · ") + (more.length ? "<br><span class='ci-sub'>" + more.join(" · ") + "</span>" : "") +
+        "<br>맞으면 아래 <b>기록 추가</b>를 눌러주세요. 틀린 칸은 고쳐서 저장하면 돼요.", "good");
+    }).catch(function (err) {
+      ocrStatus("😥 " + (err && err.message ? err.message : "사진 읽기 실패") + " — 직접 입력해주세요.", "bad");
+    });
+  }
+  document.getElementById("wtOcrBtn").addEventListener("click", function () {
+    document.getElementById("wtOcrFile").click();
+  });
+  document.getElementById("wtOcrFile").addEventListener("change", function (e) {
+    var f = e.target.files && e.target.files[0];
+    if (f) readPicoocImage(f);
+    e.target.value = "";
+  });
+  // 공유로 열렸을 때(?shared=1): 서비스워커가 넣어둔 사진 꺼내서 읽기
+  function checkSharedImage() {
+    var q = location.search;
+    if (q.indexOf("shared=") === -1) return;
+    try { history.replaceState(null, "", location.pathname); } catch (e) {}
+    if (q.indexOf("shared=err") !== -1 || !window.caches) {
+      switchTab("weight");
+      ocrStatus("😥 공유받은 사진을 못 받았어요. '📷 사진에서 읽기' 버튼으로 골라주세요.", "bad");
+      return;
+    }
+    caches.open("share-inbox").then(function (cache) {
+      return cache.match("./__shared_image").then(function (resp) {
+        if (!resp) { switchTab("weight"); ocrStatus("😥 공유받은 사진이 없어요. 사진(이미지)으로 공유해주세요.", "bad"); return; }
+        return resp.blob().then(function (blob) {
+          cache.delete("./__shared_image");
+          cache.delete("./__shared_text");
+          readPicoocImage(blob);
+        });
+      });
+    });
+  }
 
   document.getElementById("wtExportBtn").addEventListener("click", function () {
     var blob = new Blob([JSON.stringify(wtLog, null, 2)], { type: "application/json" });
@@ -1472,6 +1588,8 @@
       // 직전 기록 대비 체중 변화
       var prev = wtSortedByField("weight").filter(function (x) { return x.date < dateStr; })[0];
       var diff = (prev && r.weight != null) ? (r.weight - prev.weight) : null;
+      if (r.extra && r.extra.visceral != null) parts.push("내장지방 " + r.extra.visceral);
+      if (r.extra && r.extra.skeletal != null) parts.push("골격근 " + r.extra.skeletal + "%");
       line = [parts.join(" · ") || "-",
               diff != null ? "(직전 " + prev.date.slice(5).replace("-", "/") + " 대비 " + (diff > 0 ? "+" : "") + diff.toFixed(1) + "kg)" : ""];
     } else {
@@ -1621,6 +1739,7 @@
     if (VALID_TABS.indexOf(st) !== -1) savedTab = st;
   } catch (e) {}
   switchTab(savedTab);
+  checkSharedImage();
 
   // ---------- 서비스워커 등록 (오프라인/설치용) ----------
   if ("serviceWorker" in navigator) {

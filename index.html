@@ -58,6 +58,13 @@
   .banner.show { display: block; }
   .banner-red { background: #3a1416; color: #ff9898; border: 1px solid var(--solo); }
   .banner-yellow { background: #3a311c; color: #ffd98a; border: 1px solid var(--lunch); }
+  .ocr-box { display: none; margin: 4px 0 10px; padding: 10px 12px; border-radius: 10px; font-size: 0.88em; line-height: 1.5;
+    background: var(--card2); border: 1px solid #2c3440; }
+  .ocr-box.show { display: block; }
+  .ocr-box.good { border-color: var(--ok); }
+  .ocr-box.bad { border-color: var(--solo); color: #ff9898; }
+  .ocr-btn { width: 100%; margin-bottom: 8px; padding: 10px; border-radius: 10px; border: 1px dashed #4a5566;
+    background: transparent; color: var(--text); font-size: 0.92em; cursor: pointer; }
   .solo-allow { margin-top: 8px; font-size: 0.88em; font-weight: 700; }
   .solo-allow.ok { color: var(--ok); }
   .solo-allow.caution { color: var(--lunch); }
@@ -537,6 +544,9 @@
         <input type="number" id="wtFat" step="0.1" min="0" placeholder="예: 18.5">
       </div>
     </div>
+    <div class="ocr-box" id="wtOcrBox"></div>
+    <button type="button" id="wtOcrBtn" class="ocr-btn">📷 PICOOC 사진에서 읽기</button>
+    <input type="file" id="wtOcrFile" accept="image/*" style="display:none">
     <button type="submit" class="primary">기록 추가</button>
   </form>
 </div>

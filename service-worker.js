@@ -4,7 +4,8 @@
 // 2026-11-14: 통신이 약하면 fetch가 한참 매달려 있다 실패하므로, 3초 안에 응답이 없으면 캐시로 먼저 연다.
 // (주의: 이 파일은 PowerShell Get-Content/Set-Content로 고치지 말 것 - 한글 주석이 깨지면서
 //  줄바꿈이 사라져 cache.addAll 줄이 주석에 먹혀 오프라인 캐시가 비는 사고가 있었음)
-var CACHE_NAME = "drinklog-v17";
+var CACHE_NAME = "drinklog-v18";
+var SHARE_CACHE = "share-inbox";
 var NET_TIMEOUT_MS = 3000;
 var ASSETS = [
   "./",
@@ -29,7 +30,7 @@ self.addEventListener("activate", function (event) {
   event.waitUntil(
     caches.keys().then(function (keys) {
       return Promise.all(
-        keys.filter(function (k) { return k !== CACHE_NAME; })
+        keys.filter(function (k) { return k !== CACHE_NAME && k !== SHARE_CACHE; })
             .map(function (k) { return caches.delete(k); })
       );
     })
@@ -46,8 +47,34 @@ function fromCache(req) {
   });
 }
 
+// 2026-11-17: PICOOC 측정 보고서 이미지를 안드로이드 "공유"로 받기 (manifest share_target).
+// 받은 사진을 share-inbox 캐시에 잠깐 넣어두고 앱을 ?shared=1로 열면, 앱이 꺼내서 글자 인식으로
+// 체중/체지방률을 채운다.
+function handleShare(req) {
+  return req.formData().then(function (form) {
+    var file = form.get("media");
+    var text = [form.get("title"), form.get("text")].filter(Boolean).join("\n");
+    return caches.open(SHARE_CACHE).then(function (cache) {
+      var jobs = [];
+      if (file && file.size) {
+        jobs.push(cache.put("./__shared_image", new Response(file, { headers: { "Content-Type": file.type || "image/png" } })));
+      }
+      jobs.push(cache.put("./__shared_text", new Response(text, { headers: { "Content-Type": "text/plain; charset=utf-8" } })));
+      return Promise.all(jobs);
+    });
+  }).then(function () {
+    return Response.redirect("./index.html?shared=1", 303);
+  }).catch(function () {
+    return Response.redirect("./index.html?shared=err", 303);
+  });
+}
+
 self.addEventListener("fetch", function (event) {
   var req = event.request;
+  if (req.method === "POST" && new URL(req.url).pathname.slice(-13) === "/share-target") {
+    event.respondWith(handleShare(req));
+    return;
+  }
   if (req.method !== "GET") return;
   if (new URL(req.url).origin !== self.location.origin) return;
 
