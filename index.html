@@ -63,8 +63,6 @@
   .ocr-box.show { display: block; }
   .ocr-box.good { border-color: var(--ok); }
   .ocr-box.bad { border-color: var(--solo); color: #ff9898; }
-  .ocr-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-  a.ocr-btn { display: block; text-align: center; text-decoration: none; box-sizing: border-box; }
   .ocr-btn { width: 100%; margin-bottom: 8px; padding: 10px; border-radius: 10px; border: 1px dashed #4a5566;
     background: transparent; color: var(--text); font-size: 0.92em; cursor: pointer; }
   .solo-allow { margin-top: 8px; font-size: 0.88em; font-weight: 700; }
@@ -547,12 +545,9 @@
       </div>
     </div>
     <div class="ocr-box" id="wtOcrBox"></div>
-    <!-- 2026-11-17: PICOOC 앱 바로 열기 (안드로이드 크롬 intent 링크, 패키지 com.picooc.international).
-         측정 → 보고서 공유 → 자기관리 순서로 돌아오면 사진을 읽어서 채운다. -->
-    <div class="ocr-row">
-      <a id="wtPicoocOpen" class="ocr-btn" href="intent:#Intent;action=android.intent.action.MAIN;category=android.intent.category.LAUNCHER;package=com.picooc.international;end">⚖️ PICOOC 열기</a>
-      <button type="button" id="wtOcrBtn" class="ocr-btn">📷 사진에서 읽기</button>
-    </div>
+    <!-- (2026-11-17) PICOOC 바로 열기 버튼은 뺐다: 크롬은 웹 링크 등록이 없는 앱(PICOOC)을 intent로
+         못 열고 Play 스토어로 보낸다. 대신 홈 화면에서 자기관리와 PICOOC를 같은 폴더에 둠. -->
+    <button type="button" id="wtOcrBtn" class="ocr-btn">📷 PICOOC 사진에서 읽기</button>
     <input type="file" id="wtOcrFile" accept="image/*" style="display:none">
     <button type="submit" class="primary">기록 추가</button>
   </form>
