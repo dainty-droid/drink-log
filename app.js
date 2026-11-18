@@ -1240,11 +1240,13 @@
 
   // 같은 날짜에 체중만 혹은 체지방률만 따로 입력해도, 입력한 값만 그 날짜
   // 기록에 덮어써서 합쳐준다(둘 다 한 번에 입력 안 해도 되게).
-  function wtUpsert(date, weight, fat, extra) {
+  function wtUpsert(date, weight, fat, extra, waist) {
+    if (waist === undefined) waist = null;
     var existing = wtLog.find(function (r) { return r.date === date; });
     if (existing) {
       if (weight !== null) existing.weight = weight;
       if (fat !== null) existing.fat = fat;
+      if (waist !== null) existing.waist = waist;
       if (extra) existing.extra = extra;
       existing.createdAt = new Date().toISOString();
     } else {
@@ -1253,6 +1255,7 @@
         date: date,
         weight: weight,
         fat: fat,
+        waist: waist,
         extra: extra || undefined,
         createdAt: new Date().toISOString()
       });
@@ -1299,6 +1302,35 @@
     } else {
       fatEl.textContent = "-";
       fatDateEl.textContent = "";
+    }
+
+    // 2026-11-18 허리둘레: 최근값 + 주 1회 측정 안내
+    var waSorted = wtSortedByField("waist");
+    var waEl = document.getElementById("wtLatestWaist");
+    var waDateEl = document.getElementById("wtLatestWaistDate");
+    var dueEl = document.getElementById("wtWaistDue");
+    if (waSorted.length) {
+      var curW = waSorted[0].waist;
+      var deltaW = "";
+      if (waSorted.length > 1) {
+        var diffW = curW - waSorted[1].waist;
+        deltaW = " (" + (diffW > 0 ? "+" : "") + diffW.toFixed(1) + ")";
+      }
+      waEl.textContent = curW.toFixed(1) + "cm" + deltaW;
+      waDateEl.textContent = "· " + waSorted[0].date;
+      var days = Math.round((parseDate(todayStr()) - parseDate(waSorted[0].date)) / 86400000);
+      if (days >= 7) {
+        dueEl.textContent = "📏 허리둘레 잰 지 " + days + "일 - 이번 주 잴 차례예요";
+        dueEl.className = "waist-due due";
+      } else {
+        dueEl.textContent = "📏 다음 허리둘레 측정: " + (7 - days) + "일 뒤";
+        dueEl.className = "waist-due";
+      }
+    } else {
+      waEl.textContent = "-";
+      waDateEl.textContent = "";
+      dueEl.textContent = "📏 허리둘레는 일주일에 한 번 재서 기록해요";
+      dueEl.className = "waist-due";
     }
   }
 
@@ -1407,6 +1439,7 @@
       var parts = [];
       if (r.weight !== null && r.weight !== undefined) parts.push(r.weight.toFixed(1) + "kg");
       if (r.fat !== null && r.fat !== undefined) parts.push(r.fat.toFixed(1) + "%");
+      if (r.waist !== null && r.waist !== undefined) parts.push("허리 " + r.waist.toFixed(1) + "cm");
       dateEl.textContent = r.date + " · " + (parts.join(" / ") || "-");
       info.appendChild(dateEl);
       item.appendChild(info);
@@ -1436,18 +1469,21 @@
     var fatInput = document.getElementById("wtFat");
     var weight = weightInput.value.trim() === "" ? null : parseFloat(weightInput.value);
     var fat = fatInput.value.trim() === "" ? null : parseFloat(fatInput.value);
+    var waistInput = document.getElementById("wtWaist");
+    var waist = waistInput.value.trim() === "" ? null : parseFloat(waistInput.value);
 
-    if (weight === null && fat === null) {
-      alert("체중 또는 체지방률 중 하나는 입력해주세요.");
+    if (weight === null && fat === null && waist === null) {
+      alert("체중, 체지방률, 허리둘레 중 하나는 입력해주세요.");
       return;
     }
 
-    wtUpsert(date, weight, fat, ocrExtra);
+    wtUpsert(date, weight, fat, ocrExtra, waist);
     ocrExtra = null;
     document.getElementById("wtOcrBox").className = "ocr-box";
 
     weightInput.value = "";
     fatInput.value = "";
+    waistInput.value = "";
     renderWtAll();
     showToast("기록을 추가했습니다");
   });
@@ -1658,6 +1694,7 @@
       var parts = [];
       if (r.weight != null) parts.push(r.weight.toFixed(1) + "kg");
       if (r.fat != null) parts.push("체지방 " + r.fat.toFixed(1) + "%");
+      if (r.waist != null) parts.push("허리 " + r.waist.toFixed(1) + "cm");
       // 직전 기록 대비 체중 변화
       var prev = wtSortedByField("weight").filter(function (x) { return x.date < dateStr; })[0];
       var diff = (prev && r.weight != null) ? (r.weight - prev.weight) : null;
@@ -1684,6 +1721,7 @@
     renderWtCalendar();
     renderTrendChart("wtWeightChart", "wtWeightMinMax", "weight", "var(--appointment)");
     renderTrendChart("wtFatChart", "wtFatMinMax", "fat", "var(--lunch)");
+    renderTrendChart("wtWaistChart", "wtWaistMinMax", "waist", "var(--seasonal)");
     renderWtLogList();
   }
 

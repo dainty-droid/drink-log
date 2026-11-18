@@ -255,7 +255,9 @@
   /* 체중 */
   .wt-latest { display: flex; gap: 10px; }
   .wt-latest .streak { flex: 1; }
-  .wt-latest .num { font-size: 1.3em; }
+  .wt-latest .num { font-size: 1.15em; }
+  .waist-due { font-size: 0.78em; text-align: center; margin-top: 8px; color: var(--muted); }
+  .waist-due.due { color: var(--lunch); font-weight: 700; }
   .wt-fields { display: flex; gap: 14px; justify-content: center; margin-bottom: 14px; }
   .wt-fields .field { flex: 0 1 150px; margin-bottom: 0; }
   .wt-fields .field label { text-align: center; }
@@ -537,7 +539,12 @@
       <div class="num" id="wtLatestFat">-</div>
       <div class="lbl">체지방률 <span id="wtLatestFatDate"></span></div>
     </div>
+    <div class="streak">
+      <div class="num" id="wtLatestWaist">-</div>
+      <div class="lbl">허리둘레 <span id="wtLatestWaistDate"></span></div>
+    </div>
   </div>
+  <div class="waist-due" id="wtWaistDue"></div>
   <form id="wtAddForm" style="margin-top:12px;">
     <div class="field">
       <label>날짜</label>
@@ -551,6 +558,13 @@
       <div class="field">
         <label>체지방률 (%)</label>
         <input type="number" id="wtFat" step="0.1" min="0" placeholder="예: 18.5">
+      </div>
+    </div>
+    <!-- 2026-11-18: 허리둘레(주 1회 측정) -->
+    <div class="wt-fields">
+      <div class="field">
+        <label>허리둘레 (cm) · 주 1회</label>
+        <input type="number" id="wtWaist" step="0.1" min="0" placeholder="예: 89.0">
       </div>
     </div>
     <div class="ocr-box" id="wtOcrBox"></div>
@@ -586,6 +600,12 @@
   <h2>체지방률 추이</h2>
   <div class="trend-chart-wrap" id="wtFatChart"></div>
   <div class="trend-minmax" id="wtFatMinMax"></div>
+</div>
+
+<div class="card">
+  <h2>허리둘레 추이</h2>
+  <div class="trend-chart-wrap" id="wtWaistChart"></div>
+  <div class="trend-minmax" id="wtWaistMinMax"></div>
 </div>
 
 <div class="card">
