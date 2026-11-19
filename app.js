@@ -739,6 +739,35 @@
 
   var exLog = loadExLog();
 
+  // 2026-11-19 목표 2단계: 위의 goal(이력)은 "최소한"(못 채우면 이월), 아래는 "목표"(채우면 목표 달성).
+  // 목표는 이월분을 더해서 판정한다. 목표가 최소한보다 작거나 아직 안 정했으면 최소한과 같게 본다.
+  var EX_TARGET_HIST_KEY = "exerciseTargetHist_v1";
+  function loadTargetHist() {
+    try { var a = JSON.parse(localStorage.getItem(EX_TARGET_HIST_KEY) || "[]"); return Array.isArray(a) ? a : []; }
+    catch (e) { return []; }
+  }
+  function setTargetFrom(dateStr, n) {
+    var h = loadTargetHist().filter(function (x) { return x.from !== dateStr; });
+    h.push({ from: dateStr, goal: n });
+    h.sort(function (a, b) { return a.from < b.from ? -1 : 1; });
+    try { localStorage.setItem(EX_TARGET_HIST_KEY, JSON.stringify(h)); } catch (e) {}
+  }
+  function targetBaseOn(dateStr) {
+    var g = 0;
+    loadTargetHist().forEach(function (x) { if (x.from <= dateStr) g = x.goal; });
+    return Math.max(g, baseGoalOn(dateStr));
+  }
+  // {total, need(최소+이월), tneed(목표+이월), level: target|min|miss|rest|none}
+  function exStatus(ds) {
+    var nd = exNeed(ds), t = exDayTotal(ds);
+    var tneed = nd.rest ? 0 : targetBaseOn(ds) + nd.carry;
+    var level = nd.rest ? "rest" : t >= tneed ? "target" : t >= nd.need ? "min" : "miss";
+    return { total: t, nd: nd, need: nd.need, tneed: tneed, level: level };
+  }
+  function exFirstDate() {
+    return exLog.reduce(function (m, x) { return (!m || x.date < m) ? x.date : m; }, "");
+  }
+
   function exDayTotal(dateStr) {
     return exLog.filter(function (r) { return r.date === dateStr; })
       .reduce(function (sum, r) { return sum + r.amount; }, 0);
@@ -754,11 +783,15 @@
     var total = exDayTotal(today);
     var remain = Math.max(goal - total, 0);
     var done = total >= goal;
+    var st = exStatus(today);
 
     var countEl = document.getElementById("exRemainCount");
     countEl.textContent = done ? "0" : remain + "개";
     countEl.className = "count " + (done ? "ok" : "caution");
     renderExRestBtn();
+    document.getElementById("exCurrentTarget").textContent = targetBaseOn(today);
+    var carryEl = document.getElementById("exCarryLine");
+    carryEl.textContent = "";
 
     if (nd.rest) {
       countEl.textContent = "😴 휴식";
@@ -774,11 +807,24 @@
 
     document.getElementById("exGoalLine").textContent =
       (nd.carry > 0
-        ? "목표 " + nd.base + " + 이월 " + nd.carry + " = " + goal + "개 중 " + total + "개 완료"
-        : "목표 " + goal + "개 중 " + total + "개 완료");
+        ? "최소 " + nd.base + " + 이월 " + nd.carry + " = " + goal + " · 목표 " + st.tneed + " 중 " + total + "개"
+        : "최소 " + goal + " · 목표 " + st.tneed + " 중 " + total + "개");
 
-    document.getElementById("exDoneBanner").classList.toggle("show", done);
-    document.getElementById("exOverLine").textContent = total > goal ? "🔥 목표 초과 +" + (total - goal) + "개" : "";
+    var banner = document.getElementById("exDoneBanner");
+    if (st.level === "target") {
+      countEl.textContent = "0";
+      banner.textContent = "🎯 오늘 목표 달성!!";
+      banner.className = "banner banner-green show";
+    } else if (st.level === "min") {
+      countEl.textContent = (st.tneed - total) + "개";
+      countEl.className = "count ok";
+      banner.textContent = "✅ 기준치 달성 · 목표까지 " + (st.tneed - total) + "개 남음";
+      banner.className = "banner banner-yellow show";
+    } else {
+      banner.className = "banner banner-green";
+      carryEl.textContent = "못 채우면 " + remain + "개 내일로 이월";
+    }
+    document.getElementById("exOverLine").textContent = total > st.tneed ? "🔥 목표 초과 +" + (total - st.tneed) + "개" : "";
     document.getElementById("exCurrentGoal").textContent = nd.base;
   }
 
@@ -793,6 +839,18 @@
       d = addDays(d, -1);
     }
     document.getElementById("exStreak").textContent = count > 0 ? count + "일째" : "기록 없음";
+
+    // 목표 달성 연속 (휴식일은 건너뜀 - 끊지도 세지도 않음)
+    var d2 = new Date(), tc = 0, guard = 0;
+    if (exStatus(fmtDate(d2)).level !== "target") d2 = addDays(d2, -1);
+    var first = exFirstDate();
+    while (guard++ < 2000 && first && fmtDate(d2) >= first) {
+      var lv = exStatus(fmtDate(d2)).level;
+      if (lv === "target") tc++;
+      else if (lv !== "rest") break;
+      d2 = addDays(d2, -1);
+    }
+    document.getElementById("exTargetStreak").textContent = tc > 0 ? tc + "일째" : "-";
   }
 
   var exCalCursor = new Date();
@@ -833,34 +891,55 @@
       var goal = dateStr <= todayS ? exNeed(dateStr).need : baseGoalOn(dateStr);
       var done = total >= goal;
       var restDay = isRest(dateStr);
+      var stc = dateStr <= todayS ? exStatus(dateStr) : null;
+      var firstD = exFirstDate();
       if (restDay) cell.classList.add("ex-rest");
-      else if (done) cell.classList.add("ex-done");
+      else if (stc && stc.level === "target") cell.classList.add("ex-done");
+      else if (stc && stc.level === "min") cell.classList.add("ex-min");
+      else if (stc && dateStr < todayS && firstD && dateStr >= firstD) cell.classList.add("ex-miss");
 
       var num = document.createElement("div");
       num.textContent = d;
+      var maxRec = exMaxOn(dateStr);
+      if (maxRec) {
+        var mk = document.createElement("span");
+        mk.className = "ex-max-mark";
+        mk.textContent = " 🏆" + maxRec;
+        num.appendChild(mk);
+      }
       cell.appendChild(num);
 
-      if (restDay) {
+      if (!restDay && stc && stc.level !== "target") {
+        var lb2 = document.createElement("div");
+        if (stc.level === "min") {
+          lb2.className = "ex-min-label";
+          lb2.textContent = "기준치";
+          cell.appendChild(lb2);
+        } else if (dateStr < todayS && firstD && dateStr >= firstD) {
+          lb2.className = "ex-miss-label";
+          lb2.textContent = "이월 " + (stc.need - stc.total);
+          cell.appendChild(lb2);
+        } else if (total > 0) {
+          lb2.className = "ex-progress";
+          lb2.textContent = total + "/" + goal;
+          cell.appendChild(lb2);
+        }
+      } else if (restDay) {
         var rl = document.createElement("div");
         rl.className = "ex-rest-label";
         rl.textContent = total > 0 ? "휴식 " + total : "휴식";
         cell.appendChild(rl);
-      } else if (done) {
+      } else if (stc && stc.level === "target") {
         var lbl = document.createElement("div");
         lbl.className = "ex-done-label";
-        lbl.textContent = "달성!!";
+        lbl.textContent = "목표달성";
         cell.appendChild(lbl);
-        if (total > goal) {
+        if (total > stc.tneed) {
           var ov = document.createElement("div");
           ov.className = "ex-over";
-          ov.textContent = "+" + (total - goal);
+          ov.textContent = "+" + (total - stc.tneed);
           cell.appendChild(ov);
         }
-      } else if (total > 0) {
-        var prog = document.createElement("div");
-        prog.className = "ex-progress";
-        prog.textContent = total + "/" + goal;
-        cell.appendChild(prog);
       }
 
       grid.appendChild(cell);
@@ -881,11 +960,15 @@
     } else if (dateStr > todayStr()) {
       line = ["아직 안 온 날", "(목표 " + baseGoalOn(dateStr) + "개)"];
     } else {
-      var nd = exNeed(dateStr), t = exDayTotal(dateStr);
+      var nd = exNeed(dateStr), t = exDayTotal(dateStr), sp = exStatus(dateStr);
       var cnt = exLog.filter(function (r) { return r.date === dateStr; }).length;
-      var goalTxt = "목표 " + nd.need + (nd.carry > 0 ? " (이월 " + nd.carry + " 포함)" : "");
-      var res = t >= nd.need ? (t > nd.need ? "✅ 달성 · 초과 +" + (t - nd.need) : "✅ 달성")
-                             : "미달 " + (nd.need - t) + "개";
+      var goalTxt = "최소 " + nd.need + " · 목표 " + sp.tneed + (nd.carry > 0 ? " (이월 " + nd.carry + " 포함)" : "");
+      var res = sp.level === "target" ? (t > sp.tneed ? "🎯 목표 달성 · 초과 +" + (t - sp.tneed) : "🎯 목표 달성")
+              : sp.level === "min" ? "✅ 기준치 달성 · 목표까지 " + (sp.tneed - t)
+              : dateStr < todayStr() ? "❌ " + (nd.need - t) + "개 다음 날로 이월"
+              : "최소치까지 " + (nd.need - t) + "개";
+      var mx = exMaxOn(dateStr);
+      if (mx) res += " · 🏆 기록도전 " + mx + "개";
       line = [t + "개 / " + goalTxt, res + (cnt ? " · " + cnt + "번 입력" : "")];
     }
     showCalInfo("exCalInfo", dateStr, [line]);
@@ -955,7 +1038,7 @@
       info.className = "info";
       var dateEl = document.createElement("div");
       dateEl.className = "date";
-      dateEl.textContent = r.date + " · " + r.amount + "개";
+      dateEl.textContent = r.date + " · " + (r.max ? "🏆 기록도전 " : "") + r.amount + "개";
       info.appendChild(dateEl);
       item.appendChild(info);
 
@@ -982,6 +1065,7 @@
     if (!amount || amount <= 0) return;
 
     var wasAchieved = exAchieved(todayStr());
+    var wasTarget = exStatus(todayStr()).level === "target";
 
     exLog.push({
       id: uid(),
@@ -994,24 +1078,32 @@
     amountInput.value = "";
     renderExAll();
 
-    showToast((!wasAchieved && exAchieved(todayStr())) ? "🎉 오늘 목표 달성!!" : (amount + "개 추가했습니다"));
+    var stNow = exStatus(todayStr());
+    showToast((!wasTarget && stNow.level === "target") ? "🎯 오늘 목표 달성!!"
+              : (!wasAchieved && stNow.level === "min") ? "✅ 기준치 달성! 목표까지 " + (stNow.tneed - stNow.total) + "개"
+              : (amount + "개 추가했습니다"));
   });
 
   document.getElementById("exGoalSaveBtn").addEventListener("click", function () {
     var input = document.getElementById("exGoalInput");
-    var n = parseInt(input.value, 10);
-    if (!n || n <= 0) {
-      alert("1 이상의 숫자를 입력해주세요.");
-      return;
-    }
-    setGoalFrom(todayStr(), n);
+    var tInput = document.getElementById("exTargetInput");
+    var n = input.value.trim() === "" ? null : parseInt(input.value, 10);
+    var tn = tInput.value.trim() === "" ? null : parseInt(tInput.value, 10);
+    if (n === null && tn === null) { alert("최소한이나 목표 중 하나는 입력해주세요."); return; }
+    if ((n !== null && !(n > 0)) || (tn !== null && !(tn > 0))) { alert("1 이상의 숫자를 입력해주세요."); return; }
+    var newMin = n !== null ? n : baseGoalOn(todayStr());
+    var newT = tn !== null ? tn : targetBaseOn(todayStr());
+    if (newT < newMin) { alert("목표(" + newT + ")가 최소한(" + newMin + ")보다 작아요."); return; }
+    if (n !== null) setGoalFrom(todayStr(), n);
+    if (tn !== null) setTargetFrom(todayStr(), tn);
     input.value = "";
+    tInput.value = "";
     renderExAll();
-    showToast("목표를 " + n + "개로 설정했습니다");
+    showToast("최소 " + newMin + "개 · 목표 " + newT + "개로 설정했습니다");
   });
 
   document.getElementById("exExportBtn").addEventListener("click", function () {
-    var data = { goal: loadExGoal(), goalHist: loadGoalHist(), rest: exRest, log: exLog };
+    var data = { goal: loadExGoal(), goalHist: loadGoalHist(), targetHist: loadTargetHist(), rest: exRest, log: exLog };
     var blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
     var url = URL.createObjectURL(blob);
     var a = document.createElement("a");
@@ -1047,6 +1139,7 @@
         if (imported && imported.goalHist) { try { localStorage.setItem(EX_GOAL_HIST_KEY, JSON.stringify(imported.goalHist)); } catch (e2) {} }
         if (imported && imported.goal) saveExGoal(imported.goal);
         if (imported && Array.isArray(imported.rest)) { exRest = imported.rest.slice().sort(); saveRest(exRest); }
+        if (imported && Array.isArray(imported.targetHist)) { try { localStorage.setItem(EX_TARGET_HIST_KEY, JSON.stringify(imported.targetHist)); } catch (e3) {} }
         renderExAll();
         showToast(importedLog.length + "건 가져왔습니다");
       } catch (err) {
@@ -1204,8 +1297,60 @@
   document.getElementById("exStatPrev").addEventListener("click", function () { shiftExStat(-1); });
   document.getElementById("exStatNext").addEventListener("click", function () { shiftExStat(1); });
 
+  // ---------- 🏆 주 1회 최대 기록 도전 ----------
+  // 기록 도전 개수는 운동 기록에 {max:true}로 같이 들어가서 그날 개수에도 합산된다.
+  function exMaxOn(ds) {
+    var m = 0;
+    exLog.forEach(function (r) { if (r.max && r.date === ds && r.amount > m) m = r.amount; });
+    return m;
+  }
+  function exMaxRecords() {
+    return exLog.filter(function (r) { return r.max; })
+      .sort(function (a, b) { return a.date < b.date ? 1 : a.date > b.date ? -1 : (a.createdAt < b.createdAt ? 1 : -1); });
+  }
+  function renderChallenge() {
+    var recs = exMaxRecords();
+    var ws = fmtDate(startOfWeek(new Date()));
+    var thisWeek = recs.filter(function (r) { return r.date >= ws; });
+    var wkBest = thisWeek.reduce(function (m, r) { return Math.max(m, r.amount); }, 0);
+    var best = recs.reduce(function (m, r) { return (!m || r.amount > m.amount) ? r : m; }, null);
+    document.getElementById("chWeek").textContent = wkBest ? wkBest + "개" : "아직";
+    document.getElementById("chBest").textContent = best ? best.amount + "개" : "-";
+    document.getElementById("chBestDate").textContent = best ? "· " + best.date.slice(5) : "";
+    var btn = document.getElementById("chBtn");
+    btn.textContent = wkBest ? "🏆 이번 주 도전 완료 (" + wkBest + "개) · 다시 입력" : "🏆 기록 도전 입력 (한 번에 최대 몇 개?)";
+    btn.classList.toggle("done", !!wkBest);
+    // 주별 최고 기록 최근 6주
+    var byWeek = {};
+    recs.forEach(function (r) {
+      var w = fmtDate(startOfWeek(parseDate(r.date)));
+      if (!byWeek[w] || r.amount > byWeek[w]) byWeek[w] = r.amount;
+    });
+    var weeks = Object.keys(byWeek).sort().reverse().slice(0, 6);
+    document.getElementById("chHist").textContent = weeks.length
+      ? "주별 기록: " + weeks.map(function (w) { return w.slice(5).replace("-", "/") + "주 " + byWeek[w] + "개"; }).join(" · ")
+      : "컨디션 좋은 날, 힘 빼기 전에 한 번에 최대 몇 개 되는지 재서 입력해요. 그날 개수에도 합산돼요.";
+  }
+  document.getElementById("chBtn").addEventListener("click", function () {
+    var ws = fmtDate(startOfWeek(new Date()));
+    var already = exMaxRecords().filter(function (r) { return r.date >= ws; });
+    if (already.length && !confirm("이번 주는 이미 " + already[0].amount + "개로 도전했어요.\n한 번 더 기록할까요? (주별 기록은 더 높은 값으로 남아요)")) return;
+    var v = prompt("한 번에 최대 몇 개 했어요?\n(오늘 개수에도 합산돼요)");
+    if (v === null) return;
+    var n = parseInt(v, 10);
+    if (!n || n <= 0) { alert("1 이상의 숫자를 입력해주세요."); return; }
+    var prevBest = exMaxRecords().reduce(function (m, r) { return Math.max(m, r.amount); }, 0);
+    var wasAchieved = exAchieved(todayStr());
+    exLog.push({ id: uid(), date: todayStr(), amount: n, max: true, createdAt: new Date().toISOString() });
+    saveExLog(exLog);
+    renderExAll();
+    showToast(n > prevBest ? (prevBest ? "🏆 신기록!! " + prevBest + " → " + n + "개" : "🏆 첫 기록 " + n + "개!")
+              : (!wasAchieved && exAchieved(todayStr())) ? "🏆 " + n + "개 · 기준치 달성!" : "🏆 " + n + "개 기록 (최고 " + prevBest + "개)");
+  });
+
   function renderExAll() {
     exNeedCache = {};
+    renderChallenge();
     renderExToday();
     renderExStreak();
     renderExCalendar();
@@ -1767,7 +1912,7 @@
       version: 1,
       exportedAt: new Date().toISOString(),
       drink: log,
-      exercise: { goal: loadExGoal(), goalHist: loadGoalHist(), rest: exRest, log: exLog },
+      exercise: { goal: loadExGoal(), goalHist: loadGoalHist(), targetHist: loadTargetHist(), rest: exRest, log: exLog },
       weight: wtLog
     };
     var blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
@@ -1809,6 +1954,7 @@
           if (d.exercise.goalHist) { try { localStorage.setItem(EX_GOAL_HIST_KEY, JSON.stringify(d.exercise.goalHist)); } catch (e2) {} }
           if (d.exercise.goal) saveExGoal(d.exercise.goal);
           if (Array.isArray(d.exercise.rest)) { exRest = d.exercise.rest.slice().sort(); saveRest(exRest); }
+          if (Array.isArray(d.exercise.targetHist)) { try { localStorage.setItem(EX_TARGET_HIST_KEY, JSON.stringify(d.exercise.targetHist)); } catch (e3) {} }
         }
         wtLog = mergeById(wtLog, d.weight || []);
         saveWtLog(wtLog);

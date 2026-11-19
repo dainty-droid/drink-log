@@ -248,6 +248,19 @@
   .ex-done-label { font-size: 0.6em; color: var(--ok); font-weight: 800; margin-top: 2px; }
   .cal-day.ex-rest { box-shadow: inset 0 0 0 2px #8b7fd6; background: rgba(139,127,214,0.16); }
   .ex-rest-label { font-size: 0.6em; color: #b3a9f0; font-weight: 800; margin-top: 2px; }
+  /* 2026-11-19 최소/목표 2단계 + 기록 도전 */
+  .cal-day.ex-min { box-shadow: inset 0 0 0 2px var(--lunch); background: rgba(240,180,41,0.14); }
+  .ex-min-label { font-size: 0.6em; color: var(--lunch); font-weight: 800; margin-top: 2px; }
+  .cal-day.ex-miss { box-shadow: inset 0 0 0 2px var(--warn); background: rgba(229,72,77,0.14); }
+  .ex-miss-label { font-size: 0.58em; color: #ff9898; font-weight: 800; margin-top: 2px; }
+  .ex-max-mark { font-size: 0.58em; color: #f0b429; font-weight: 800; }
+  .ex-carry-line { color: #ff9898; font-weight: 700; font-size: 0.82em; margin-top: 4px; }
+  .ch-box { display: flex; gap: 8px; margin-bottom: 10px; }
+  .ch-box .streak { flex: 1; }
+  .ch-hist { font-size: 0.8em; color: var(--muted); margin-top: 8px; line-height: 1.6; }
+  .ch-btn { width: 100%; padding: 11px; border-radius: 10px; border: 1px solid #f0b429; background: rgba(240,180,41,0.12);
+            color: #ffd98a; font-weight: 800; font-size: 0.95em; cursor: pointer; }
+  .ch-btn.done { border-style: dashed; opacity: 0.85; }
   .rest-btn { width: 100%; margin-top: 10px; padding: 9px; border-radius: 10px; border: 1px dashed #8b7fd6;
     background: transparent; color: #b3a9f0; font-size: 0.9em; cursor: pointer; }
   .rest-btn.on { background: rgba(139,127,214,0.16); border-style: solid; }
@@ -442,9 +455,10 @@
     <div style="text-align:right;">
       <div class="week-label" id="exGoalLine"></div>
       <div class="ex-over-line" id="exOverLine"></div>
+      <div class="ex-carry-line" id="exCarryLine"></div>
     </div>
   </div>
-  <div class="banner banner-green" id="exDoneBanner">🎉 오늘 목표 달성!!</div>
+  <div class="banner banner-green" id="exDoneBanner">🎯 오늘 목표 달성!!</div>
   <form id="exAddForm">
     <div class="field num-field">
       <label>오늘 한 갯수</label>
@@ -455,9 +469,29 @@
 </div>
 
 <div class="card">
+  <h2>🏆 주 1회 최대 기록 도전</h2>
+  <div class="ch-box">
+    <div class="streak">
+      <div class="num" id="chWeek">-</div>
+      <div class="lbl">이번 주 기록</div>
+    </div>
+    <div class="streak">
+      <div class="num" id="chBest">-</div>
+      <div class="lbl">개인 최고 <span id="chBestDate"></span></div>
+    </div>
+  </div>
+  <button type="button" class="ch-btn" id="chBtn">🏆 기록 도전 입력 (한 번에 최대 몇 개?)</button>
+  <div class="ch-hist" id="chHist"></div>
+</div>
+
+<div class="card">
   <div class="streaks">
     <div class="streak">
       <div class="num any" id="exStreak">-</div>
+      <div class="lbl">최소치 연속</div>
+    </div>
+    <div class="streak">
+      <div class="num any" id="exTargetStreak">-</div>
       <div class="lbl">목표 달성 연속</div>
     </div>
   </div>
@@ -474,6 +508,8 @@
   <div class="cal-grid" id="exCalGrid"></div>
   <div class="legend">
     <span><i class="dot" style="background:var(--ok)"></i>목표 달성</span>
+    <span><i class="dot" style="background:var(--lunch)"></i>기준치 달성</span>
+    <span><i class="dot" style="background:var(--warn)"></i>미달·이월</span>
     <span><i class="dot" style="background:#8b7fd6"></i>휴식일 (주 1회)</span>
   </div>
   <button type="button" id="exRestBtn" class="rest-btn">😴 휴식일로 지정</button>
@@ -494,7 +530,7 @@
   <div id="exChart"></div>
   <div class="chart-detail" id="exChartDetail">막대를 누르면 상세가 보여요</div>
   <div class="legend">
-    <span><i class="dot" style="background:var(--ok)"></i>목표 달성</span>
+    <span><i class="dot" style="background:var(--ok)"></i>최소치 달성</span>
     <span><i class="dot" style="background:#d9822b"></i>미달</span>
     <span><i class="dot" style="background:#f0b429"></i>초과분</span>
     <span>― 목표선</span>
@@ -505,10 +541,14 @@
 <div class="card">
   <h2>목표 설정</h2>
   <div class="field num-field">
-    <label>하루 목표 (현재 <span id="exCurrentGoal"></span>개)</label>
-    <input type="number" id="exGoalInput" min="1" placeholder="예: 200">
+    <label>최소한 (현재 <span id="exCurrentGoal"></span>개) · 못 채우면 다음 날로 이월</label>
+    <input type="number" id="exGoalInput" min="1" placeholder="예: 100">
   </div>
-  <button class="secondary" type="button" id="exGoalSaveBtn">목표 변경</button>
+  <div class="field num-field">
+    <label>목표 (현재 <span id="exCurrentTarget"></span>개) · 채우면 목표 달성</label>
+    <input type="number" id="exTargetInput" min="1" placeholder="예: 150">
+  </div>
+  <button class="secondary" type="button" id="exGoalSaveBtn">저장 (오늘부터 적용)</button>
 </div>
 
 <div class="card">
