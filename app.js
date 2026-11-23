@@ -772,6 +772,21 @@
     return exLog.filter(function (r) { return r.date === dateStr; })
       .reduce(function (sum, r) { return sum + r.amount; }, 0);
   }
+  // 2026-11-23 종류 구분: kind "bar"(푸쉬업바) / "plain"(일반), 이전 기록은 kind 없음(구분 전)
+  function exKindOf(r) { return r.kind === "bar" || r.kind === "plain" ? r.kind : "none"; }
+  function exKindLabel(k) { return k === "bar" ? "💪 푸쉬업바" : k === "plain" ? "🙌 일반" : ""; }
+  function exDayKinds(dateStr) {
+    var o = { bar: 0, plain: 0, none: 0 };
+    exLog.forEach(function (r) { if (r.date === dateStr) o[exKindOf(r)] += r.amount; });
+    return o;
+  }
+  function exKindText(o) {
+    var p = [];
+    if (o.bar) p.push("바 " + o.bar);
+    if (o.plain) p.push("일반 " + o.plain);
+    if (o.none) p.push("구분전 " + o.none);
+    return p.join(" · ");
+  }
   function exAchieved(dateStr) {
     return exDayTotal(dateStr) >= exNeed(dateStr).need;
   }
@@ -949,6 +964,7 @@
   var exPicked = "";
   function pickExDate(dateStr) {
     exPicked = dateStr;
+    if (dateStr <= todayStr()) { document.getElementById("exDate").value = dateStr; updateExDateNote(); }
     renderExCalendar();
     var line;
     renderExRestBtn();
@@ -969,7 +985,8 @@
               : "최소치까지 " + (nd.need - t) + "개";
       var mx = exMaxOn(dateStr);
       if (mx) res += " · 🏆 기록도전 " + mx + "개";
-      line = [t + "개 / " + goalTxt, res + (cnt ? " · " + cnt + "번 입력" : "")];
+      var kt = exKindText(exDayKinds(dateStr));
+      line = [t + "개" + (kt ? " (" + kt + ")" : "") + " / " + goalTxt, res + (cnt ? " · " + cnt + "번 입력" : "")];
     }
     showCalInfo("exCalInfo", dateStr, [line]);
   }
@@ -1038,7 +1055,7 @@
       info.className = "info";
       var dateEl = document.createElement("div");
       dateEl.className = "date";
-      dateEl.textContent = r.date + " · " + (r.max ? "🏆 기록도전 " : "") + r.amount + "개";
+      dateEl.textContent = r.date + " · " + (r.max ? "🏆 기록도전 " : "") + (exKindLabel(exKindOf(r)) ? exKindLabel(exKindOf(r)) + " " : "") + r.amount + "개";
       info.appendChild(dateEl);
       item.appendChild(info);
 
@@ -1061,28 +1078,51 @@
   document.getElementById("exAddForm").addEventListener("submit", function (e) {
     e.preventDefault();
     var amountInput = document.getElementById("exAmount");
-    var amount = parseInt(amountInput.value, 10);
-    if (!amount || amount <= 0) return;
+    var barInput = document.getElementById("exAmountBar");
+    var dateInput = document.getElementById("exDate");
+    var plain = parseInt(amountInput.value, 10) || 0;
+    var bar = parseInt(barInput.value, 10) || 0;
+    if (plain < 0 || bar < 0) { alert("0 이상의 숫자를 입력해주세요."); return; }
+    if (!plain && !bar) { alert("푸쉬업바나 일반 중 하나는 입력해주세요."); return; }
+    var ds = dateInput.value || todayStr();
+    if (ds > todayStr()) { alert("미래 날짜에는 입력할 수 없어요."); return; }
+    var isToday = ds === todayStr();
+    if (!isToday && !confirm(dateLabel(ds) + "에 추가할까요?\n" + exKindText({ bar: bar, plain: plain, none: 0 }) + "개")) return;
 
-    var wasAchieved = exAchieved(todayStr());
-    var wasTarget = exStatus(todayStr()).level === "target";
+    var wasAchieved = exAchieved(ds);
+    var wasTarget = exStatus(ds).level === "target";
 
-    exLog.push({
-      id: uid(),
-      date: todayStr(),
-      amount: amount,
-      createdAt: new Date().toISOString()
-    });
+    var now = new Date().toISOString();
+    if (bar) exLog.push({ id: uid(), date: ds, amount: bar, kind: "bar", createdAt: now });
+    if (plain) exLog.push({ id: uid(), date: ds, amount: plain, kind: "plain", createdAt: now });
     saveExLog(exLog);
 
     amountInput.value = "";
+    barInput.value = "";
+    dateInput.value = todayStr();
+    updateExDateNote();
     renderExAll();
 
-    var stNow = exStatus(todayStr());
-    showToast((!wasTarget && stNow.level === "target") ? "🎯 오늘 목표 달성!!"
-              : (!wasAchieved && stNow.level === "min") ? "✅ 기준치 달성! 목표까지 " + (stNow.tneed - stNow.total) + "개"
-              : (amount + "개 추가했습니다"));
+    var stNow = exStatus(ds), pre = isToday ? "오늘 " : dateLabel(ds) + " ";
+    showToast((!wasTarget && stNow.level === "target") ? "🎯 " + pre + "목표 달성!!"
+              : (!wasAchieved && stNow.level === "min") ? "✅ " + pre + "기준치 달성! 목표까지 " + (stNow.tneed - stNow.total) + "개"
+              : (pre + (bar + plain) + "개 추가했습니다"));
   });
+
+  function updateExDateNote() {
+    var v = document.getElementById("exDate").value;
+    document.getElementById("exDateNote").textContent = (v && v !== todayStr()) ? "· " + dateLabel(v) + " 추가 입력" : "";
+  }
+  (function initExDate() {
+    var di = document.getElementById("exDate");
+    di.value = todayStr(); di.max = todayStr();
+    di.addEventListener("change", updateExDateNote);
+    // 앱을 켜둔 채 날짜가 바뀌어도 오늘로 맞춰지게
+    document.addEventListener("visibilitychange", function () {
+      if (!document.hidden && di.value > todayStr()) di.value = todayStr();
+      if (!document.hidden) { di.max = todayStr(); updateExDateNote(); }
+    });
+  })();
 
   document.getElementById("exGoalSaveBtn").addEventListener("click", function () {
     var input = document.getElementById("exGoalInput");
@@ -1160,7 +1200,7 @@
   }
   // 기간 집계: 합계, 목표합(기본 목표 기준), 초과합, 달성일, 경과일, 최고 기록
   function exAgg(from, to) {
-    var todayS = todayStr(), r = { total: 0, goal: 0, over: 0, doneDays: 0, days: 0, best: 0 };
+    var todayS = todayStr(), r = { total: 0, goal: 0, over: 0, doneDays: 0, days: 0, best: 0, bar: 0, plain: 0, none: 0 };
     var first = exLog.reduce(function (m, x) { return (!m || x.date < m) ? x.date : m; }, "");
     for (var d = new Date(from); d <= to; d = addDays(d, 1)) {
       var ds = fmtDate(d);
@@ -1168,6 +1208,7 @@
       if (!first || ds < first) continue; // 운동 시작 전 날짜는 통계에서 제외
       var t = exDayTotal(ds), nd = exNeed(ds);
       r.total += t; r.goal += nd.base; r.days++;
+      var kd = exDayKinds(ds); r.bar += kd.bar; r.plain += kd.plain; r.none += kd.none;
       if (t > r.best) r.best = t;
       if (t >= nd.need) { r.doneDays++; r.over += t - nd.need; }
     }
@@ -1248,7 +1289,8 @@
       hit.style.cursor = "pointer";
       hit.addEventListener("click", function () {
         if (!r.agg.days) { detail.textContent = r.bk.name + " · 아직 안 온 날"; return; }
-        var s = r.bk.name + " · " + t.toLocaleString() + "개 / 목표 " + r.goal.toLocaleString();
+        var kt = exKindText(r.agg);
+        var s = r.bk.name + " · " + t.toLocaleString() + "개" + (kt ? " (" + kt + ")" : "") + " / 목표 " + r.goal.toLocaleString();
         if (exStatMode !== "day") s += " · 달성 " + r.agg.doneDays + "/" + r.agg.days + "일";
         if (r.agg.over > 0) s += " · 초과 +" + r.agg.over;
         else if (exStatMode === "day" && t < r.goal) s += " · 미달 " + (r.goal - t);
@@ -1261,12 +1303,15 @@
     var all = exAgg(info.from, info.to);
     var tiles = [
       ["합계", all.total.toLocaleString() + "개", ""],
+      ["💪 푸쉬업바", all.bar.toLocaleString() + "개", ""],
+      ["🙌 일반", all.plain.toLocaleString() + "개", ""],
       ["하루 평균", all.days ? Math.round(all.total / all.days) + "개" : "-", ""],
       ["달성률", all.days ? Math.round(all.doneDays / all.days * 100) + "%" : "-", ""],
       ["달성일", all.doneDays + "/" + all.days + "일", ""],
       ["초과 합계", "+" + all.over.toLocaleString(), "over"],
       ["최고 기록(하루)", all.best + "개", ""]
     ];
+    if (all.none > 0) tiles.splice(3, 0, ["구분 전 기록", all.none.toLocaleString() + "개", ""]);
     var grid = document.getElementById("exStatGrid");
     grid.innerHTML = "";
     tiles.forEach(function (tl) {
@@ -1341,7 +1386,7 @@
     if (!n || n <= 0) { alert("1 이상의 숫자를 입력해주세요."); return; }
     var prevBest = exMaxRecords().reduce(function (m, r) { return Math.max(m, r.amount); }, 0);
     var wasAchieved = exAchieved(todayStr());
-    exLog.push({ id: uid(), date: todayStr(), amount: n, max: true, createdAt: new Date().toISOString() });
+    exLog.push({ id: uid(), date: todayStr(), amount: n, max: true, kind: "plain", createdAt: new Date().toISOString() });
     saveExLog(exLog);
     renderExAll();
     showToast(n > prevBest ? (prevBest ? "🏆 신기록!! " + prevBest + " → " + n + "개" : "🏆 첫 기록 " + n + "개!")

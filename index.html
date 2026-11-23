@@ -276,6 +276,9 @@
   .wt-fields .field label { text-align: center; }
   /* 큰 숫자 입력칸 (체중/운동 공통) */
   .num-field { max-width: 200px; margin: 10px auto 14px; }
+  .ex-date-field { max-width: 314px; margin: 12px auto 10px; }
+  .ex-date-field label { text-align: center; }
+  .ex-date-note { color: var(--lunch); font-weight: 700; }
   .num-field label { text-align: center; }
   .wt-fields input[type="number"],
   .num-field input[type="number"] {
@@ -460,9 +463,20 @@
   </div>
   <div class="banner banner-green" id="exDoneBanner">🎯 오늘 목표 달성!!</div>
   <form id="exAddForm">
-    <div class="field num-field">
-      <label>오늘 한 갯수</label>
-      <input type="number" id="exAmount" min="1" placeholder="예: 30" required>
+    <!-- 2026-11-23: 날짜 선택(지난 날 추가 입력) + 푸쉬업바/일반 구분 입력 -->
+    <div class="field ex-date-field">
+      <label>날짜 <span class="ex-date-note" id="exDateNote"></span></label>
+      <input type="date" id="exDate" required>
+    </div>
+    <div class="wt-fields">
+      <div class="field">
+        <label>💪 푸쉬업바</label>
+        <input type="number" id="exAmountBar" min="1" placeholder="예: 70">
+      </div>
+      <div class="field">
+        <label>🙌 일반</label>
+        <input type="number" id="exAmount" min="1" placeholder="예: 30">
+      </div>
     </div>
     <button type="submit" class="primary">입력</button>
   </form>
