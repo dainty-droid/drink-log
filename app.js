@@ -554,6 +554,8 @@
     var drinkType = pickedType === "기타" ? fTypeInput.value.trim() : pickedType;
     var amount = document.getElementById("fAmount").value.trim();
     var memo = document.getElementById("fMemo").value.trim();
+    // 2026-11-26: 오늘이 아닌 날짜면 확인
+    if (date !== todayStr() && !confirm(dateLabel(date) + "에 기록할까요?\n(오늘 날짜가 아니에요)")) return;
 
     log.push({
       id: uid(),
@@ -573,6 +575,7 @@
     typePick.querySelector('input[value="막걸리"]').checked = true;
     document.getElementById("fAmount").value = "";
     document.getElementById("fMemo").value = "";
+    document.getElementById("fDate").value = todayStr();
 
     renderAll();
     showToast("기록을 추가했습니다");
@@ -1113,6 +1116,21 @@
     var v = document.getElementById("exDate").value;
     document.getElementById("exDateNote").textContent = (v && v !== todayStr()) ? "· " + dateLabel(v) + " 추가 입력" : "";
   }
+  // 2026-11-26: 앱을 켜둔 채 하루가 지나면 기록 날짜칸(음주/운동/체중)을 전부 오늘로 되돌림
+  (function resetDatesOnNewDay() {
+    var lastDay = todayStr();
+    function check() {
+      if (document.hidden) return;
+      var t = todayStr();
+      if (t === lastDay) return;
+      lastDay = t;
+      ["fDate", "exDate", "wtDate"].forEach(function (id) { var el = document.getElementById(id); if (el) el.value = t; });
+      if (typeof updateExDateNote === "function") updateExDateNote();
+    }
+    document.addEventListener("visibilitychange", check);
+    window.addEventListener("focus", check);
+    window.addEventListener("pageshow", check);
+  })();
   (function initExDate() {
     var di = document.getElementById("exDate");
     di.value = todayStr(); di.max = todayStr();
@@ -1667,6 +1685,12 @@
       return;
     }
 
+    // 2026-11-26: 오늘이 아닌 날짜면 확인 (같은 날 기록이 있으면 덮어쓴다는 것도 알려줌)
+    if (date !== todayStr()) {
+      var hasOld = wtLog.some(function (x) { return x.date === date; });
+      if (!confirm(dateLabel(date) + "에 기록할까요?\n(오늘 날짜가 아니에요" + (hasOld ? " · 그날 기존 기록에 덮어써요" : "") + ")")) return;
+    }
+
     wtUpsert(date, weight, fat, ocrExtra, waist);
     ocrExtra = null;
     document.getElementById("wtOcrBox").className = "ocr-box";
@@ -1674,6 +1698,7 @@
     weightInput.value = "";
     fatInput.value = "";
     waistInput.value = "";
+    document.getElementById("wtDate").value = todayStr();
     renderWtAll();
     showToast("기록을 추가했습니다");
   });

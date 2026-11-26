@@ -4,7 +4,7 @@
 // 2026-11-14: 통신이 약하면 fetch가 한참 매달려 있다 실패하므로, 3초 안에 응답이 없으면 캐시로 먼저 연다.
 // (주의: 이 파일은 PowerShell Get-Content/Set-Content로 고치지 말 것 - 한글 주석이 깨지면서
 //  줄바꿈이 사라져 cache.addAll 줄이 주석에 먹혀 오프라인 캐시가 비는 사고가 있었음)
-var CACHE_NAME = "drinklog-v25";
+var CACHE_NAME = "drinklog-v26";
 var SHARE_CACHE = "share-inbox";
 var NET_TIMEOUT_MS = 3000;
 var ASSETS = [
